@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 # SpadesX
-project(SpadesX)
+project(SpadesX LANGUAGES C)
 
 # Find pthread
 find_package(Threads REQUIRED)
@@ -12,6 +12,8 @@ find_package(Lua REQUIRED)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 option(CMAKE_UNITY_BUILD "Enable Unity Build" ON)
+
+option(GIT_SUBMODULES_FETCH "Fetch the required Git submodules" ON)
 
 # Add third party libraries
 add_subdirectory(Extern)
@@ -26,16 +28,13 @@ target_link_libraries(SpadesX
         Server
         Util
         enet
+        tomlc99
         mapvxl
         m
         json-c
         readline
         Threads::Threads
 )
-
-if (UNIX)
-    target_link_libraries(SpadesX PRIVATE bsd)
-endif()
 
 add_subdirectory(Source)
 
@@ -44,8 +43,8 @@ set_target_properties(SpadesX Util Server
     INTERPROCEDURAL_OPTIMIZATION true
 )
 
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/config.json)
-configure_file(${PROJECT_SOURCE_DIR}/Resources/config.json ${CMAKE_BINARY_DIR}/config.json COPYONLY)
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/config.toml)
+configure_file(${PROJECT_SOURCE_DIR}/Resources/config.toml ${CMAKE_BINARY_DIR}/config.toml COPYONLY)
 endif()
 
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/GameMode.lua)
@@ -56,6 +55,6 @@ if (NOT EXISTS ${CMAKE_BINARY_DIR}/Border_Hallway.vxl)
 configure_file(${PROJECT_SOURCE_DIR}/Resources/Border_Hallway.vxl ${CMAKE_BINARY_DIR}/Border_Hallway.vxl COPYONLY)
 endif()
 
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/Border_Hallway.json)
-configure_file(${PROJECT_SOURCE_DIR}/Resources/Border_Hallway.json ${CMAKE_BINARY_DIR}/Border_Hallway.json COPYONLY)
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/Border_Hallway.toml)
+configure_file(${PROJECT_SOURCE_DIR}/Resources/Border_Hallway.toml ${CMAKE_BINARY_DIR}/Border_Hallway.toml COPYONLY)
 endif()
