@@ -25,6 +25,7 @@ typedef struct timers
     uint64_t since_periodic_message;
     uint64_t since_last_intel_tent_check;
     uint64_t during_noclip_period;
+    uint64_t since_last_water_damage;
 } timers_t;
 
 typedef struct global_timers

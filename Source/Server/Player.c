@@ -91,6 +91,16 @@ void update_movement_and_grenades(server_t* server)
                 vector3f_t zero = {0, 0, 0};
                 send_set_hp(server, player, player, falldamage, 0, 4, 5, 0, zero);
             }
+
+            // Apply water damage if enabled
+            if (server->protocol.water_damage_enabled && player->wade && player->alive) {
+                uint64_t time = get_nanos();
+                if (time - player->timers.since_last_water_damage >= NANO_IN_SECOND) {
+                    vector3f_t zero = {0, 0, 0};
+                    send_set_hp(server, player, player, server->protocol.water_damage, 0, 4, 5, 0, zero);
+                    player->timers.since_last_water_damage = time;
+                }
+            }
         }
         handle_grenade(server, player);
     }
@@ -238,6 +248,7 @@ void init_player(server_t*  server,
     player->timers.time_since_last_wu            = 0;
     player->timers.since_last_weapon_input       = 0;
     player->timers.since_last_intel_tent_check   = 0;
+    player->timers.since_last_water_damage       = 0;
     player->told_to_master                       = 0;
     player->hp                                   = 100;
     player->blocks                               = 50;

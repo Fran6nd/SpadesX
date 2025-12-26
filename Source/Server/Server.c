@@ -138,6 +138,12 @@ static void _server_init(server_t*   server,
     TOMLH_GET_INT_ARRAY(map_table, map_size, "map_size", 3, ((int[]){512, 512, 64}), 1);
     TOMLH_GET_INT(map_table, capture_limit, "capture_limit", server->capture_limit, 1);
 
+    /* [water_damage] */
+    uint8_t water_damage_enabled;
+    uint8_t water_damage_per_second;
+    TOMLH_GET_INT(map_table, water_damage_enabled, "water_damage_enabled", 0, 1);
+    TOMLH_GET_INT(map_table, water_damage_per_second, "water_damage_per_second", 5, 1);
+
     /* [spawnpoints] */
     toml_table_t* spawnpoints_table;
     toml_table_t* team1_spawnpoints_table;
@@ -213,6 +219,9 @@ static void _server_init(server_t*   server,
     server->protocol.name_team[0][strlen(team1Name)] = '\0';
     server->protocol.name_team[1][strlen(team2Name)] = '\0';
     server->protocol.gamemode.score_limit = capture_limit;
+
+    server->protocol.water_damage_enabled = water_damage_enabled;
+    server->protocol.water_damage         = water_damage_per_second;
 
     memcpy(server->server_name, serverName, strlen(serverName));
     server->server_name[strlen(serverName)] = '\0';
