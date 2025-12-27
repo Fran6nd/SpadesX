@@ -1,0 +1,166 @@
+// example_gamemode.c - Example SpadesX plugin
+// This plugin demonstrates the same functionality as the Lua script from GameMode.lua
+//
+// Features:
+// - Prevents destroying the Babel platform (206-306, 240-272, z=0-2)
+// - Prevents teams from destroying their own towers (except with spade)
+// - Forces players to build in their team color
+// - Auto-restocks players when blocks < 10
+// - Adds /restock command
+// - Initializes map with snow and platform
+
+#include "../Source/Server/PluginAPI.h"
+#include <stdio.h>
+#include <string.h>
+
+// Plugin metadata
+PLUGIN_EXPORT plugin_info_t spadesx_plugin_info = {
+    .name = "Example Gamemode",
+    .version = "1.0.0",
+    .author = "SpadesX Team",
+    .description = "Babel-style gamemode with platform protection",
+    .api_version = SPADESX_PLUGIN_API_VERSION
+};
+
+// Store the API for later use
+static const plugin_api_t* api = NULL;
+
+// ============================================================================
+// PLUGIN LIFECYCLE
+// ============================================================================
+
+PLUGIN_EXPORT int spadesx_plugin_init(server_t* server, const plugin_api_t* plugin_api)
+{
+    (void)server;  // Unused
+    api = plugin_api;
+    printf("[Example Plugin] Init function called\n");
+    printf("[Example Plugin] API pointer: %p\n", (void*)plugin_api);
+    printf("[Example Plugin] Loaded successfully!\n");
+    return 0;
+}
+
+PLUGIN_EXPORT void spadesx_plugin_shutdown(server_t* server)
+{
+    (void)server;  // Unused
+    printf("[Example Plugin] Shutting down\n");
+}
+
+// ============================================================================
+// EVENT HANDLERS
+// ============================================================================
+
+// Server initialization - set up the map
+PLUGIN_EXPORT void spadesx_plugin_on_server_init(server_t* server, const plugin_api_t* plugin_api)
+{
+    printf("[Example Plugin] Initializing map...\n");
+
+    map_t* map = plugin_api->get_map(server);
+
+    if (!map) {
+        printf("[Example Plugin] ERROR: Map is NULL!\n");
+        return;
+    }
+
+    // Create Babel platform (cyan) - smaller test first
+    printf("[Example Plugin] Creating platform...\n");
+    for (int32_t x = 206; x <= 306; x++) {
+        for (int32_t y = 240; y <= 272; y++) {
+            plugin_api->init_add_block(server, x, y, 1, 0xFF00FFFF);  // Cyan
+        }
+    }
+
+    // Set intel positions on top of platform
+    printf("[Example Plugin] Setting intel positions...\n");
+    int32_t intel_z = plugin_api->map_find_top_block(map, 255, 255);
+    plugin_api->init_set_intel_position(server, 0, 255, 255, intel_z);
+    plugin_api->init_set_intel_position(server, 1, 255, 255, intel_z);
+
+    printf("[Example Plugin] Map initialization complete!\n");
+}
+
+// Block destruction check
+PLUGIN_EXPORT int spadesx_plugin_on_block_destroy(server_t* server, player_t* player, uint8_t tool, block_t* block)
+{
+    int32_t x = block->x;
+    int32_t y = block->y;
+    int32_t z = block->z;
+
+    // Prevent destroying the Babel platform
+    int is_platform =
+        ((x >= 206 && x <= 306) && (y >= 240 && y <= 272) && (z == 2 || z == 0)) ||
+        ((x >= 205 && x <= 307) && (y >= 239 && y <= 273) && (z == 1));
+
+    if (is_platform) {
+        api->player_send_notice(player, "You should try to destroy the ennemy's tower... Not the platform!");
+        return PLUGIN_DENY;
+    }
+
+    // Allow spade destruction anywhere (for demonstration)
+    if (tool == TOOL_SPADE) {
+        return PLUGIN_ALLOW;
+    }
+
+    // Prevent teams from destroying their own towers
+    plugin_team_t team = api->player_get_team(server, player);
+
+    // Team 1 tower is on the right (x > 512-220 = 292)
+    // Team 0 tower is on the left (x < 220)
+    if ((team.id == 1 && x > 292) || (team.id == 0 && x < 220)) {
+        api->player_send_notice(player, "You should try to destroy the ennemy's tower... It is not on this side of the map!");
+        return PLUGIN_DENY;
+    }
+
+    return PLUGIN_ALLOW;
+}
+
+// Block placement check
+PLUGIN_EXPORT int spadesx_plugin_on_block_place(server_t* server, player_t* player, block_t* block)
+{
+    plugin_team_t team = api->player_get_team(server, player);
+    uint32_t player_color = api->player_get_color(player);
+
+    // Force players to build in their team color
+    if (block->color != team.color) {
+        api->player_set_color(player, team.color);
+        block->color = team.color;  // Modify the block color
+    }
+
+    // Auto restock when blocks are low
+    if (api->player_get_blocks(player) < 10) {
+        api->player_restock(player);
+    }
+
+    return PLUGIN_ALLOW;
+}
+
+// Command handler
+PLUGIN_EXPORT int spadesx_plugin_on_command(server_t* server, player_t* player, const char* command)
+{
+    if (strcmp(command, "/restock") == 0) {
+        api->player_restock(player);
+        api->player_send_notice(player, "Restocked!");
+        return PLUGIN_ALLOW;  // Command was handled
+    }
+
+    return PLUGIN_DENY;  // Command not handled
+}
+
+// Player connect
+PLUGIN_EXPORT void spadesx_plugin_on_player_connect(server_t* server, player_t* player)
+{
+    const char* name = api->player_get_name(player);
+    printf("[Example Plugin] Player %s connected\n", name);
+
+    // Welcome the player
+    api->player_send_notice(player, "Welcome to the Babel-style server!");
+    api->player_send_notice(player, "Type /restock to refill your blocks and grenades");
+}
+
+// Player disconnect
+PLUGIN_EXPORT void spadesx_plugin_on_player_disconnect(server_t* server, player_t* player, const char* reason)
+{
+    const char* name = api->player_get_name(player);
+    printf("[Example Plugin] Player %s disconnected: %s\n", name, reason);
+}
+
+// All functions are exported directly with PLUGIN_EXPORT above

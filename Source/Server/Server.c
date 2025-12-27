@@ -8,6 +8,7 @@
 #include <Server/ParseConvert.h>
 #include <Server/Ping.h>
 #include <Server/Player.h>
+#include <Server/Plugin.h>
 #include <Server/Server.h>
 #include <Server/Structs/GrenadeStruct.h>
 #include <Server/Structs/ServerStruct.h>
@@ -435,6 +436,12 @@ void server_start(server_args args)
     command_populate_all(&server);
     init_packets(&server);
 
+    // Initialize plugin system
+    plugin_system_init(&server);
+
+    // Dispatch server init event to plugins
+    plugin_dispatch_server_init(&server);
+
     server.master.enable_master_connection = args.master;
     server.manager_passwd                  = args.manager_password;
     server.admin_passwd                    = args.admin_password;
@@ -471,12 +478,18 @@ void server_start(server_args args)
         sleep(0);
     }
 
+    // Server is shutting down, notify plugins
+    plugin_dispatch_server_shutdown(&server);
+
     // Server is shutting down, kick all players
     player_t *player, *tmp;
     HASH_ITER(hh, server.players, player, tmp)
     {
         enet_peer_disconnect_now(player->peer, REASON_KICKED);
     }
+
+    // Unload all plugins
+    plugin_system_shutdown(&server);
 
     free_all_commands(&server);
     free_all_packets(&server);

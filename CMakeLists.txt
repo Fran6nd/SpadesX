@@ -27,9 +27,10 @@ target_link_libraries(SpadesX
         tomlc99
         mapvxl
         m
-        json-c
-        readline
+        /opt/local/lib/libjson-c.dylib
+        /opt/local/lib/libreadline.dylib
         Threads::Threads
+        ${CMAKE_DL_LIBS}
 )
 
 add_subdirectory(Source)

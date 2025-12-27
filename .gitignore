@@ -21,3 +21,18 @@ compile_commands.json
 
 .DS_Store
 ._.git
+
+#
+# Plugins
+#
+
+# Ignore plugin build artifacts
+plugins/CMakeCache.txt
+plugins/CMakeFiles/
+plugins/Makefile
+plugins/cmake_install.cmake
+
+# Ignore compiled plugin binaries
+plugins/*.so
+plugins/*.dylib
+plugins/*.dll

@@ -5,6 +5,7 @@
 #include <Server/IntelTent.h>
 #include <Server/Nodes.h>
 #include <Server/Packets/Packets.h>
+#include <Server/Plugin.h>
 #include <Server/Staff.h>
 #include <Util/Checks/BlockChecks.h>
 #include <Util/Checks/PlayerChecks.h>
@@ -24,7 +25,15 @@ block_action_build(server_t* server, player_t* player, uint8_t action_type, uint
     {
         return;
     }
-    mapvxl_set_color(&server->s_map.map, X, Y, Z, player->tool_color.raw);
+
+    // Check with plugins
+    block_t block = {X, Y, Z, player->tool_color.raw};
+    if (plugin_dispatch_block_place(server, player, &block) == PLUGIN_DENY) {
+        return;
+    }
+
+    // Plugin may have modified the color
+    mapvxl_set_color(&server->s_map.map, X, Y, Z, block.color);
     player->blocks--;
     moveIntelAndTentUp(server);
     send_block_action(server, player, action_type, X, Y, Z);
@@ -38,6 +47,14 @@ block_action_destroy_one(server_t* server, player_t* player, uint8_t action_type
           ((player->item == TOOL_SPADE && block_action_delay_check(server, player, time_now, action_type, 0)) ||
           (player->item == TOOL_GUN && block_action_weapon_checks(server, player, time_now)))))
     {
+        return;
+    }
+
+    // Check with plugins
+    uint32_t block_color = mapvxl_get_color(&server->s_map.map, X, Y, Z);
+    block_t block = {X, Y, Z, block_color};
+    uint8_t tool = player->item;
+    if (plugin_dispatch_block_destroy(server, player, tool, &block) == PLUGIN_DENY) {
         return;
     }
 
@@ -66,6 +83,15 @@ block_action_destroy_three(server_t* server, player_t* player, uint8_t action_ty
     {
         return;
     }
+
+    // Check with plugins (check middle block)
+    uint32_t block_color = mapvxl_get_color(&server->s_map.map, X, Y, Z);
+    block_t block = {X, Y, Z, block_color};
+    uint8_t tool = player->item;
+    if (plugin_dispatch_block_destroy(server, player, tool, &block) == PLUGIN_DENY) {
+        return;
+    }
+
     for (uint32_t z = Z - 1; z <= Z + 1; z++) {
         if (z >= 62) {
             continue;

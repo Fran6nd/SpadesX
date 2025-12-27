@@ -107,6 +107,8 @@ set(SERVER_HEADERS
     Ping.h
     ParseConvert.h
     Player.h
+    Plugin.h
+    PluginAPI.h
 )
 
 set(SERVER_SOURCES
@@ -126,6 +128,7 @@ set(SERVER_SOURCES
     Ping.c
     ParseConvert.c
     Player.c
+    Plugin.c
 )
 
 target_sources(Server
@@ -136,3 +139,6 @@ target_sources(Server
 )
 
 target_link_libraries(Server PRIVATE SpadesXCommon Util)
+
+# Add json-c include directories
+target_include_directories(Server PRIVATE /opt/local/include)
