@@ -17,6 +17,8 @@ typedef enum map_rotation_mode
 typedef struct string_node
 {
     char*               string;
+    char**              scripts;       // per-map script filenames (NULL if none)
+    size_t              scripts_count;
     struct string_node *next, *prev;
 } string_node_t;
 

@@ -1,3 +1,4 @@
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Server.h>
 #include <Util/Checks/PacketChecks.h>
 #include <Util/Log.h>
@@ -42,6 +43,11 @@ void receive_set_color(server_t* server, player_t* player, stream_t* data)
         LOG_WARNING("Assigned ID: %d doesnt match sent ID: %d in set color packet", player->id, received_id);
     }
 
-    player->tool_color = received_color;
+    uint32_t color = received_color.raw;
+    if (scripting_on_color_change(server, player, &color) == SCRIPTING_DENY) {
+        return;
+    }
+    received_color.raw     = color;
+    player->tool_color     = received_color;
     send_set_color(server, player, received_color);
 }

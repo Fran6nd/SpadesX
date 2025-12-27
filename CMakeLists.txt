@@ -27,9 +27,10 @@ target_link_libraries(SpadesX
         tomlc99
         mapvxl
         m
-        json-c
-        readline
+        /opt/local/lib/libjson-c.dylib
+        /opt/local/lib/libreadline.dylib
         Threads::Threads
+        lua54
 )
 
 add_subdirectory(Source)
@@ -39,12 +40,16 @@ set_target_properties(SpadesX Util Server
     INTERPROCEDURAL_OPTIMIZATION true
 )
 
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/config.toml)
 configure_file(${PROJECT_SOURCE_DIR}/Resources/config.toml ${CMAKE_BINARY_DIR}/config.toml COPYONLY)
-endif()
 
 # Copy Resources directory structure to build directory
 # This includes the maps folder structure (Resources/maps/MapName/MapName.{vxl,toml})
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/Resources)
     file(COPY ${PROJECT_SOURCE_DIR}/Resources/ DESTINATION ${CMAKE_BINARY_DIR}/Resources)
 endif()
+
+# Copy scripts directory to build dir (server-wide Lua scripts)
+file(COPY ${PROJECT_SOURCE_DIR}/Resources/scripts DESTINATION ${CMAKE_BINARY_DIR})
+
+# Copy map_scripts directory to build dir (per-map Lua scripts)
+file(COPY ${PROJECT_SOURCE_DIR}/Resources/map_scripts DESTINATION ${CMAKE_BINARY_DIR})

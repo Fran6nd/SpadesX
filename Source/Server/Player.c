@@ -1,3 +1,4 @@
+#include <lauxlib.h>
 #include <Server/Grenade.h>
 #include <Server/IntelTent.h>
 #include <Server/Master.h>
@@ -274,9 +275,12 @@ void init_player(server_t*  server,
             free(grenade);
         }
     }
-    player->is_invisible = 0;
-    player->kills        = 0;
-    player->deaths       = 0;
+    player->is_invisible        = 0;
+    player->kills               = 0;
+    player->deaths              = 0;
+    player->is_bot              = 0;
+    player->controller_L        = NULL;
+    player->lua_controller_ref  = LUA_NOREF;
     memset(player->name, 0, PLAYER_NAME_STRLEN + 1);
     memset(player->os_info, 0, 255);
 }
@@ -289,6 +293,11 @@ void send_joining_data(server_t* server, player_t* player)
     {
         if (receiver != player && is_past_join_screen(receiver)) {
             send_existing_player(server, player, receiver);
+            // If already spawned, also send CreatePlayer so the joining client
+            // renders them at their current position (not just knowing they exist).
+            if (receiver->state == STATE_READY) {
+                send_create_player(server, player, receiver);
+            }
         }
     }
     send_state_data(server, player);
@@ -308,6 +317,12 @@ void on_player_update(server_t* server, player_t* player)
             break;
         case STATE_JOINING:
             send_joining_data(server, player);
+            break;
+        case STATE_PICK_SCREEN:
+            // Bots skip pick screen and go straight to spawning
+            if (player->is_bot && player->team != TEAM_SPECTATOR) {
+                player->state = STATE_SPAWNING;
+            }
             break;
         case STATE_SPAWNING:
             if (player->team != TEAM_SPECTATOR) {
@@ -476,6 +491,128 @@ void on_new_player_connection(server_t* server, ENetEvent* event)
     player->state                         = STATE_STARTING_MAP;
     HASH_ADD(hh, server->players, id, sizeof(uint8_t), player);
     HASH_SORT(server->players, player_sort);
+}
+
+// Dummy ENetPeer for bots - prevents NULL pointer crashes
+// Initialize with ENET_PEER_STATE_CONNECTED so enet_peer_send accepts packets without warnings
+// Packets are never actually sent since the peer has no real connection
+static ENetPeer dummy_bot_peer = {
+    .state = ENET_PEER_STATE_CONNECTED,
+};
+
+player_t* create_bot(server_t* server, const char* name, uint8_t team, uint8_t weapon)
+{
+    if (!server || !name) {
+        return NULL;
+    }
+
+    // Check if server is full
+    if (server->protocol.num_players >= server->protocol.max_players) {
+        LOG_WARNING("Cannot create bot: server is full");
+        return NULL;
+    }
+
+    // Find a free player ID
+    uint8_t player_id = _on_connect(server);
+    if (player_id == 0xFF) {
+        LOG_WARNING("Cannot create bot: no free player ID");
+        return NULL;
+    }
+
+    // Allocate bot player
+    player_t* bot = spadesx_calloc(1, sizeof(player_t));
+    if (!bot) {
+        LOG_ERROR("Failed to allocate memory for bot");
+        server->protocol.num_players--;
+        return NULL;
+    }
+
+    // Initialize bot
+    vector3f_t empty   = {0, 0, 0};
+    vector3f_t forward = {1, 0, 0};
+    vector3f_t height  = {0, 0, 1};
+    vector3f_t strafe  = {0, 1, 0};
+    init_player(server, bot, 0, 0, empty, forward, strafe, height);
+
+    // Set bot-specific fields
+    bot->id     = player_id;
+    bot->peer   = &dummy_bot_peer;  // Use dummy peer to prevent NULL pointer crashes
+    bot->is_bot = 1;
+    bot->hp     = 100;
+    bot->team   = team >= 2 ? TEAM_SPECTATOR : team;
+    bot->weapon = weapon > 2 ? WEAPON_RIFLE : weapon;
+
+    // Set default weapon stats based on weapon type
+    set_default_player_ammo(bot);
+
+    // Copy bot name
+    strncpy(bot->name, name, PLAYER_NAME_STRLEN);
+    bot->name[PLAYER_NAME_STRLEN] = '\0';
+
+    // Add to player hash table
+    HASH_ADD(hh, server->players, id, sizeof(uint8_t), bot);
+    HASH_SORT(server->players, player_sort);
+
+    LOG_INFO("Bot %s (#%hhu) created on team %hhu", bot->name, bot->id, bot->team);
+
+    // Bots skip the network join flow and go straight to pick screen, then spawning
+    bot->state = STATE_PICK_SCREEN;
+    bot->welcome_sent = 1;  // Bots don't need welcome messages
+
+    return bot;
+}
+
+void destroy_bot(server_t* server, player_t* bot)
+{
+    if (!server || !bot) {
+        return;
+    }
+
+    // Verify it's actually a bot
+    if (!bot->is_bot) {
+        LOG_WARNING("Attempted to destroy non-bot player %s (#%hhu)", bot->name, bot->id);
+        return;
+    }
+
+    LOG_INFO("Destroying bot %s (#%hhu)", bot->name, bot->id);
+
+    // Release Lua controller reference if set
+    if (bot->controller_L && bot->lua_controller_ref != LUA_NOREF) {
+        luaL_unref((lua_State*)bot->controller_L, LUA_REGISTRYINDEX, bot->lua_controller_ref);
+        bot->controller_L       = NULL;
+        bot->lua_controller_ref = LUA_NOREF;
+    }
+
+    // Notify other players that bot disconnected
+    send_player_left(server, bot);
+
+    // Clean up bot's map queue
+    if (bot->map_queue != NULL) {
+        queue_t *node, *tmp_queue;
+        DL_FOREACH_SAFE(bot->map_queue, node, tmp_queue)
+        {
+            free(node->block);
+            DL_DELETE(bot->map_queue, node);
+            free(node);
+        }
+        bot->map_queue = NULL;
+    }
+
+    // Clean up grenades
+    grenade_t* grenade;
+    grenade_t* tmp;
+    DL_FOREACH_SAFE(bot->grenade, grenade, tmp)
+    {
+        DL_DELETE(bot->grenade, grenade);
+        free(grenade);
+    }
+
+    // Remove from player hash table
+    HASH_DEL(server->players, bot);
+    server->protocol.num_players--;
+
+    // Free bot memory
+    free(bot);
 }
 
 void for_players(server_t* server)

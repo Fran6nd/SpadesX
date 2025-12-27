@@ -107,6 +107,9 @@ set(SERVER_HEADERS
     Ping.h
     ParseConvert.h
     Player.h
+    Scripting/ScriptingAPI.h
+    Scripting/Lua/LuaBindings.h
+    Scripting/Lua/LuaScriptManager.h
 )
 
 set(SERVER_SOURCES
@@ -126,6 +129,9 @@ set(SERVER_SOURCES
     Ping.c
     ParseConvert.c
     Player.c
+    Scripting/ScriptingAPI.c
+    Scripting/Lua/LuaBindings.c
+    Scripting/Lua/LuaScriptManager.c
 )
 
 target_sources(Server
@@ -135,4 +141,7 @@ target_sources(Server
         ${SERVER_HEADERS}
 )
 
-target_link_libraries(Server PRIVATE SpadesXCommon Util)
+target_link_libraries(Server PRIVATE SpadesXCommon Util lua54)
+
+# Add json-c include directory
+target_include_directories(Server SYSTEM PRIVATE /opt/local/include)

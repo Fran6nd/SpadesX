@@ -25,7 +25,10 @@ void send_player_left(server_t* server, player_t* player)
             stream_write_u8(&stream, player->id);
 
             if (enet_peer_send(connected_player->peer, 0, packet) != 0) {
-                LOG_WARNING("Failed to send player left event");
+                // Only warn for real players, not bots (bots use dummy peer)
+                if (!connected_player->is_bot) {
+                    LOG_WARNING("Failed to send player left event");
+                }
                 enet_packet_destroy(packet);
             }
         }

@@ -1,5 +1,6 @@
 #include <Server/Packets/Packets.h>
 #include <Server/Server.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Util/Checks/PositionChecks.h>
 #include <Util/Enums.h>
 #include <Util/Log.h>
@@ -34,6 +35,10 @@ void receive_hit_packet(server_t* server, player_t* player, stream_t* data)
     if (allow_shot(
         server, player, hit_player, timeNow, distance, &x, &y, &z, shot_pos, shot_orien, hit_pos, shot_eye_pos))
     {
+        if (scripting_on_player_hit(server, player, hit_player, hit_type, player->weapon) == SCRIPTING_DENY) {
+            return;
+        }
+
         if(player->item == TOOL_GUN && player->weapon_pellets != 0) {
             player->weapon_pellets--;
         }

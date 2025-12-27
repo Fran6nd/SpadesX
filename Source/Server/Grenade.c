@@ -1,3 +1,4 @@
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Gamemodes/Gamemodes.h>
 #include <Server/IntelTent.h>
 #include <Server/Nodes.h>
@@ -73,6 +74,7 @@ void handle_grenade(server_t* server, player_t* player)
         if (grenade->sent) {
             physics_move_grenade(server, grenade, &server->physics);
             if ((get_nanos() - grenade->time_since_sent) / 1000000000.f >= grenade->fuse) {
+                scripting_on_grenade_explode(server, player, grenade->position);
                 uint8_t allowToDestroy = 0;
                 if (grenadeGamemodeCheck(server, grenade->position)) {
                     send_block_action(server,

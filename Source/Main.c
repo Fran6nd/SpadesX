@@ -37,7 +37,7 @@ int main(void)
     const char*         rotation_mode_str     = NULL;
     map_rotation_mode_t rotation_mode         = MAP_ROTATION_TOML_DEFINED;
 
-    size_t map_list_len;
+    size_t map_list_len              = 0;
     size_t welcome_message_list_len;
     size_t periodic_message_list_len;
 
@@ -76,6 +76,7 @@ int main(void)
             rotation_mode = MAP_ROTATION_TOML_DEFINED;
         }
     }
+
 
     TOMLH_GET_INT_ARRAY(server_table, periodic_delays, "periodic_delays", 5, ((uint8_t[]){1, 5, 10, 30, 60}), 1);
     TOMLH_GET_STRING_ARRAY_AS_DL(server_table, welcome_message_list, welcome_message_list_len, "welcome_messages", 1);

@@ -2,6 +2,7 @@
 #include <Server/Packets/Packets.h>
 #include <Server/ParseConvert.h>
 #include <Server/Server.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Util/Alloc.h>
 #include <Util/Checks/PlayerChecks.h>
 #include <Util/Enums.h>
@@ -29,7 +30,10 @@ void send_existing_player(server_t* server, player_t* receiver, player_t* existi
     stream_write_array(&stream, existing_player->name, PLAYER_NAME_STRLEN);       // NAME
 
     if (enet_peer_send(receiver->peer, 0, packet) != 0) {
-        LOG_WARNING("Failed to send player state");
+        // Only warn for real players, not bots (bots use dummy peer)
+        if (!receiver->is_bot) {
+            LOG_WARNING("Failed to send player state");
+        }
         enet_packet_destroy(packet);
     }
 }
@@ -171,6 +175,9 @@ void receive_existing_player(server_t* server, player_t* player, stream_t* data)
                                player->name);
         }
         player->welcome_sent = 1; // So we dont send the message to the player on each time they spawn.
+
+        // Dispatch player connect event to plugins
+        scripting_on_player_connect(server, player);
     }
 
     if (server->protocol.gamemode.intel_held[0] == 0) {

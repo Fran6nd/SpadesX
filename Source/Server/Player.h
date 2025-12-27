@@ -22,4 +22,8 @@ uint8_t get_player_unstuck(server_t* server, player_t* player);
 uint8_t is_staff(server_t* server, player_t* player);
 void    update_movement_and_grenades(server_t* server);
 
+// Bot management functions
+player_t* create_bot(server_t* server, const char* name, uint8_t team, uint8_t weapon);
+void      destroy_bot(server_t* server, player_t* bot);
+
 #endif

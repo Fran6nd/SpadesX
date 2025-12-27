@@ -1,0 +1,1142 @@
+// LuaScriptManager.c - Lua 5.4 scripting backend
+
+#include <Server/Scripting/Lua/LuaScriptManager.h>
+#include <Server/Scripting/Lua/LuaBindings.h>
+#include <Server/Structs/ServerStruct.h>
+#include <Server/Structs/PlayerStruct.h>
+#include <Server/Structs/CommandStruct.h>
+#include <Util/Log.h>
+#include <Util/Uthash.h>
+#include <Util/Utlist.h>
+#include <Util/Alloc.h>
+
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+
+#include <dirent.h>
+#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
+
+// ============================================================================
+// Module state
+// ============================================================================
+
+static lua_State* g_server_lua = NULL; // Persistent server-wide state
+static lua_State* g_map_lua    = NULL; // Per-map state, replaced on each rotation
+static server_t*  g_server     = NULL; // Current server reference
+
+// Key used to store the server pointer in the Lua registry.
+// Using the address of this variable as a unique lightuserdata key.
+static const char g_server_key = 's';
+
+// Tracks a command registered from a Lua script so it can be cleaned up
+// when the owning Lua state is closed.
+typedef struct lua_cmd_entry {
+    char       name[30];
+    lua_State* L;
+    int        func_ref;             // LUA_REGISTRYINDEX reference
+    struct lua_cmd_entry* next;
+} lua_cmd_entry_t;
+
+static lua_cmd_entry_t* g_server_cmds = NULL; // Lifetime: server startup → shutdown
+static lua_cmd_entry_t* g_map_cmds    = NULL; // Lifetime: map load → map unload
+
+// ============================================================================
+// Hook registry — the 'on' decorator proxy injected into g_map_lua
+// ============================================================================
+
+// on.<event>(fn): append fn to _registered_hooks[event]
+static int register_handler(lua_State* L)
+{
+    const char* event = lua_tostring(L, lua_upvalueindex(1));
+    luaL_checktype(L, 1, LUA_TFUNCTION);
+
+    lua_getglobal(L, "_registered_hooks");          // [-0, +1] hooks table
+    lua_getfield(L, -1, event);                     // hooks[event]
+    if (!lua_istable(L, -1)) {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, -3, event);                 // hooks[event] = {}
+    }
+    int n = (int)lua_rawlen(L, -1);
+    lua_pushvalue(L, 1);                            // fn
+    lua_rawseti(L, -2, n + 1);
+    lua_pop(L, 2);                                  // pop hooks[event] + hooks
+    return 0;
+}
+
+// __index metamethod for 'on' table: returns a register_handler closure
+static int on_index(lua_State* L)
+{
+    // L[1]=on table, L[2]=key e.g. "map_load"
+    // Prepend "on_" so on.map_load registers under "on_map_load"
+    const char* key = luaL_checkstring(L, 2);
+    char event[64];
+    snprintf(event, sizeof(event), "on_%s", key);
+    lua_pushstring(L, event);
+    lua_pushcclosure(L, register_handler, 1);
+    return 1;
+}
+
+static void inject_hook_registry(lua_State* L)
+{
+    // _registered_hooks = {}
+    lua_newtable(L);
+    lua_setglobal(L, "_registered_hooks");
+
+    // on = setmetatable({}, {__index = on_index})
+    lua_newtable(L);              // on table
+    lua_newtable(L);              // metatable
+    lua_pushcfunction(L, on_index);
+    lua_setfield(L, -2, "__index");
+    lua_setmetatable(L, -2);
+    lua_setglobal(L, "on");
+}
+
+// ============================================================================
+// C command wrapper — called by the server command system when a
+// Lua-registered command is invoked.
+// ============================================================================
+
+static void lua_cmd_execute(void* p_server, command_args_t arguments)
+{
+    (void)p_server;
+
+    if (arguments.argc == 0 || !arguments.argv[0]) {
+        return;
+    }
+    const char* cmd_name = arguments.argv[0];
+
+    // Search server commands, then map commands.
+    lua_cmd_entry_t* entry = g_server_cmds;
+    while (entry) {
+        if (strncmp(entry->name, cmd_name, sizeof(entry->name)) == 0) {
+            break;
+        }
+        entry = entry->next;
+    }
+    if (!entry) {
+        entry = g_map_cmds;
+        while (entry) {
+            if (strncmp(entry->name, cmd_name, sizeof(entry->name)) == 0) {
+                break;
+            }
+            entry = entry->next;
+        }
+    }
+    if (!entry) {
+        return;
+    }
+
+    lua_State* L = entry->L;
+
+    // Stack: push function, then player_id, then args table.
+    lua_rawgeti(L, LUA_REGISTRYINDEX, entry->func_ref);
+
+    if (arguments.player) {
+        lua_pushinteger(L, arguments.player->id);
+    } else {
+        lua_pushinteger(L, -1); // console
+    }
+
+    lua_newtable(L);
+    for (uint32_t i = 1; i < arguments.argc; i++) {
+        lua_pushstring(L, arguments.argv[i]);
+        lua_rawseti(L, -2, (lua_Integer)i);
+    }
+
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] Command '%s' handler error: %s",
+                  cmd_name, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+static void store_server(lua_State* L, server_t* server)
+{
+    lua_pushlightuserdata(L, (void*)&g_server_key);
+    lua_pushlightuserdata(L, server);
+    lua_settable(L, LUA_REGISTRYINDEX);
+}
+
+server_t* lua_mgr_get_server(lua_State* L)
+{
+    lua_pushlightuserdata(L, (void*)&g_server_key);
+    lua_gettable(L, LUA_REGISTRYINDEX);
+    server_t* server = (server_t*)lua_touserdata(L, -1);
+    lua_pop(L, 1);
+    return server;
+}
+
+static lua_State* new_state(server_t* server)
+{
+    lua_State* L = luaL_newstate();
+    if (!L) {
+        return NULL;
+    }
+    luaL_openlibs(L);
+    store_server(L, server);
+    lua_bindings_register(L);
+    return L;
+}
+
+static void load_directory(lua_State* L, const char* dir)
+{
+    DIR* d = opendir(dir);
+    if (!d) {
+        if (errno != ENOENT) {
+            LOG_WARNING("[Scripting] Cannot open scripts directory: %s", dir);
+        }
+        return;
+    }
+
+    int         count = 0;
+    struct dirent* ent;
+    while ((ent = readdir(d)) != NULL) {
+        size_t len = strlen(ent->d_name);
+        if (len > 4 && strcmp(ent->d_name + len - 4, ".lua") == 0) {
+            char path[512];
+            snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
+            if (luaL_dofile(L, path) != LUA_OK) {
+                LOG_ERROR("[Scripting] Error loading %s: %s",
+                          path, lua_tostring(L, -1));
+                lua_pop(L, 1);
+            } else {
+                LOG_INFO("[Scripting] Loaded: %s", path);
+                count++;
+            }
+        }
+    }
+    closedir(d);
+
+    if (count > 0) {
+        LOG_INFO("[Scripting] %d server script(s) loaded from %s", count, dir);
+    }
+}
+
+// Unregister and free all entries in a command list.
+static void unregister_cmds(server_t* server, lua_cmd_entry_t** list)
+{
+    lua_cmd_entry_t* cmd;
+    lua_cmd_entry_t* tmp;
+
+    LL_FOREACH_SAFE(*list, cmd, tmp) {
+        command_t* scmd = NULL;
+        HASH_FIND_STR(server->cmds_map, cmd->name, scmd);
+        if (scmd) {
+            HASH_DEL(server->cmds_map, scmd);
+            LL_DELETE(server->cmds_list, scmd);
+            free(scmd);
+        }
+        if (cmd->L) {
+            luaL_unref(cmd->L, LUA_REGISTRYINDEX, cmd->func_ref);
+        }
+        LL_DELETE(*list, cmd);
+        free(cmd);
+    }
+    *list = NULL;
+}
+
+// ============================================================================
+// Public lifecycle
+// ============================================================================
+
+void lua_script_manager_init(server_t* server)
+{
+    g_server = server;
+
+    g_server_lua = new_state(server);
+    if (!g_server_lua) {
+        LOG_ERROR("[Scripting] Failed to create server Lua state");
+        return;
+    }
+
+    load_directory(g_server_lua, "scripts");
+    LOG_INFO("[Scripting] Server scripting initialized");
+}
+
+void lua_script_manager_shutdown(server_t* server)
+{
+    // Unload map state first (releases map commands).
+    lua_script_manager_map_unload(server, NULL);
+
+    unregister_cmds(server, &g_server_cmds);
+
+    if (g_server_lua) {
+        lua_close(g_server_lua);
+        g_server_lua = NULL;
+    }
+
+    g_server = NULL;
+    LOG_INFO("[Scripting] Server scripting shut down");
+}
+
+void lua_script_manager_map_load(server_t* server, const char* map_name,
+                                  char** scripts, size_t count)
+{
+    if (!map_name) return;
+
+    if (!scripts || count == 0) {
+        LOG_INFO("[Scripting] No scripts for map: %s", map_name);
+        return;
+    }
+
+    g_map_lua = new_state(server);
+    if (!g_map_lua) {
+        LOG_ERROR("[Scripting] Failed to create map Lua state for: %s", map_name);
+        return;
+    }
+
+    inject_hook_registry(g_map_lua);
+
+    for (size_t i = 0; i < count; i++) {
+        if (!scripts[i]) continue;
+        char path[256];
+        snprintf(path, sizeof(path), "map_scripts/%s", scripts[i]);
+        if (luaL_dofile(g_map_lua, path) == LUA_OK) {
+            LOG_INFO("[Scripting] Loaded map script: %s", path);
+        } else {
+            const char* err = lua_tostring(g_map_lua, -1);
+            LOG_ERROR("[Scripting] Error in map script %s: %s",
+                      path, err ? err : "unknown error");
+            lua_pop(g_map_lua, 1);
+        }
+    }
+}
+
+void lua_script_manager_map_unload(server_t* server, const char* map_name)
+{
+    unregister_cmds(server, &g_map_cmds);
+
+    // Clear controllers owned by the map Lua state before closing it,
+    // to prevent dangling lua_State* pointers on any surviving bots.
+    if (g_map_lua && g_server) {
+        player_t *p, *tmp;
+        HASH_ITER(hh, g_server->players, p, tmp) {
+            if (p->is_bot && p->controller_L == (void*)g_map_lua) {
+                luaL_unref(g_map_lua, LUA_REGISTRYINDEX, p->lua_controller_ref);
+                p->controller_L       = NULL;
+                p->lua_controller_ref = LUA_NOREF;
+            }
+        }
+    }
+
+    if (g_map_lua) {
+        lua_close(g_map_lua);
+        g_map_lua = NULL;
+    }
+
+    if (map_name) {
+        LOG_INFO("[Scripting] Map scripting unloaded for: %s", map_name);
+    }
+}
+
+// ============================================================================
+// Command registration (called from LuaBindings.c)
+// ============================================================================
+
+void lua_mgr_register_command(lua_State* L, int func_ref,
+                               const char* name, const char* description,
+                               uint32_t permissions)
+{
+    if (!g_server || !L || !name) {
+        return;
+    }
+
+    // Reject if a command with this name already exists.
+    command_t* existing = NULL;
+    HASH_FIND_STR(g_server->cmds_map, name, existing);
+    if (existing) {
+        LOG_WARNING("[Scripting] Command already registered: %s", name);
+        luaL_unref(L, LUA_REGISTRYINDEX, func_ref);
+        return;
+    }
+
+    // Track for cleanup on state close.
+    lua_cmd_entry_t* entry = spadesx_malloc(sizeof(lua_cmd_entry_t));
+    strncpy(entry->name, name, sizeof(entry->name) - 1);
+    entry->name[sizeof(entry->name) - 1] = '\0';
+    entry->L        = L;
+    entry->func_ref = func_ref;
+    entry->next     = NULL;
+
+    if (L == g_map_lua) {
+        LL_APPEND(g_map_cmds, entry);
+    } else {
+        LL_APPEND(g_server_cmds, entry);
+    }
+
+    // Create and register the server-side command_t.
+    command_t* cmd = spadesx_malloc(sizeof(command_t));
+    cmd->execute    = lua_cmd_execute;
+    cmd->parse_args = 1;
+    cmd->permissions = permissions;
+    cmd->next       = NULL;
+
+    strncpy(cmd->id, name, sizeof(cmd->id) - 1);
+    cmd->id[sizeof(cmd->id) - 1] = '\0';
+
+    if (description) {
+        strncpy(cmd->description, description, sizeof(cmd->description) - 1);
+        cmd->description[sizeof(cmd->description) - 1] = '\0';
+    } else {
+        snprintf(cmd->description, sizeof(cmd->description), "Script command: %s", name);
+    }
+
+    HASH_ADD_STR(g_server->cmds_map, id, cmd);
+    LL_APPEND(g_server->cmds_list, cmd);
+
+    LOG_INFO("[Scripting] Registered command: %s", name);
+}
+
+// ============================================================================
+// Hook dispatch helpers — named globals (used for g_server_lua / init.lua)
+// ============================================================================
+
+static void dispatch_void_0(lua_State* L, const char* fn)
+{
+    if (!L) {
+        return;
+    }
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+static void dispatch_void_1s(lua_State* L, const char* fn, const char* s)
+{
+    if (!L) {
+        return;
+    }
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_pushstring(L, s ? s : "");
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+static void dispatch_void_1i(lua_State* L, const char* fn, lua_Integer i)
+{
+    if (!L) {
+        return;
+    }
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_pushinteger(L, i);
+    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+static void dispatch_void_1i_1s(lua_State* L, const char* fn,
+                                 lua_Integer i, const char* s)
+{
+    if (!L) {
+        return;
+    }
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_pushinteger(L, i);
+    lua_pushstring(L, s ? s : "");
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+static void dispatch_void_1i_3f(lua_State* L, const char* fn,
+                                  lua_Integer i,
+                                  lua_Number x, lua_Number y, lua_Number z)
+{
+    if (!L) {
+        return;
+    }
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_pushinteger(L, i);
+    lua_pushnumber(L, x);
+    lua_pushnumber(L, y);
+    lua_pushnumber(L, z);
+    if (lua_pcall(L, 4, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+// Deny hook: (player_id, x, y, z) — used for block_destroy.
+// Returns 1 if the script returned false, 0 otherwise.
+static int dispatch_deny_4i(lua_State* L, const char* fn,
+                              lua_Integer pid,
+                              lua_Integer x, lua_Integer y, lua_Integer z)
+{
+    if (!L) {
+        return 0;
+    }
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return 0;
+    }
+    lua_pushinteger(L, pid);
+    lua_pushinteger(L, x);
+    lua_pushinteger(L, y);
+    lua_pushinteger(L, z);
+    if (lua_pcall(L, 4, 1, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+    lua_settop(L, base);
+    return denied;
+}
+
+// Deny hook: (shooter_id, victim_id, hit_type, weapon) — for player_hit.
+static int dispatch_deny_4i_hit(lua_State* L, const char* fn,
+                                  lua_Integer shooter, lua_Integer victim,
+                                  lua_Integer hit_type, lua_Integer weapon)
+{
+    if (!L) {
+        return 0;
+    }
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return 0;
+    }
+    lua_pushinteger(L, shooter);
+    lua_pushinteger(L, victim);
+    lua_pushinteger(L, hit_type);
+    lua_pushinteger(L, weapon);
+    if (lua_pcall(L, 4, 1, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+    lua_settop(L, base);
+    return denied;
+}
+
+// Block-place hook: (player_id, x, y, z, r, g, b)
+// Script can return false to deny, r,g,b to allow with new color, or nothing to allow.
+// Returns 1 if denied, 0 if allowed (and possibly modifies block->color).
+static int dispatch_block_place(lua_State* L, const char* fn,
+                                 lua_Integer pid, block_t* block)
+{
+    if (!L) {
+        return 0;
+    }
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return 0;
+    }
+    uint32_t c = block->color;
+    lua_pushinteger(L, pid);
+    lua_pushinteger(L, block->x);
+    lua_pushinteger(L, block->y);
+    lua_pushinteger(L, block->z);
+    lua_pushinteger(L, (c >> 16) & 0xFF); // r
+    lua_pushinteger(L, (c >>  8) & 0xFF); // g
+    lua_pushinteger(L, c         & 0xFF); // b
+    if (lua_pcall(L, 7, LUA_MULTRET, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int nret = lua_gettop(L) - base;
+    if (nret == 0) {
+        return 0; // no return = allow
+    }
+    if (nret == 1 && lua_isboolean(L, base + 1)) {
+        int denied = !lua_toboolean(L, base + 1);
+        lua_settop(L, base);
+        return denied;
+    }
+    if (nret >= 3 &&
+        lua_isinteger(L, base + 1) &&
+        lua_isinteger(L, base + 2) &&
+        lua_isinteger(L, base + 3))
+    {
+        int r = (int)lua_tointeger(L, base + 1);
+        int g = (int)lua_tointeger(L, base + 2);
+        int b = (int)lua_tointeger(L, base + 3);
+        lua_settop(L, base);
+        block->color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+        return 0; // allow with modified color
+    }
+    lua_settop(L, base);
+    return 0; // unrecognised return — allow
+}
+
+// Color-change hook: (player_id, r, g, b)
+// Script can return false to deny, r,g,b to allow with new color, or nothing to allow.
+static int dispatch_color_change(lua_State* L, const char* fn,
+                                   lua_Integer pid, uint32_t* new_color)
+{
+    if (!L) {
+        return 0;
+    }
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return 0;
+    }
+    uint32_t c = *new_color;
+    lua_pushinteger(L, pid);
+    lua_pushinteger(L, (c >> 16) & 0xFF); // r
+    lua_pushinteger(L, (c >>  8) & 0xFF); // g
+    lua_pushinteger(L, c         & 0xFF); // b
+    if (lua_pcall(L, 4, LUA_MULTRET, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int nret = lua_gettop(L) - base;
+    if (nret == 0) {
+        return 0;
+    }
+    if (nret == 1 && lua_isboolean(L, base + 1)) {
+        int denied = !lua_toboolean(L, base + 1);
+        lua_settop(L, base);
+        return denied;
+    }
+    if (nret >= 3 &&
+        lua_isinteger(L, base + 1) &&
+        lua_isinteger(L, base + 2) &&
+        lua_isinteger(L, base + 3))
+    {
+        int r = (int)lua_tointeger(L, base + 1);
+        int g = (int)lua_tointeger(L, base + 2);
+        int b = (int)lua_tointeger(L, base + 3);
+        lua_settop(L, base);
+        *new_color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+        return 0;
+    }
+    lua_settop(L, base);
+    return 0;
+}
+
+// Command hook: (player_id, command) — returns 1 if handled.
+static int dispatch_command(lua_State* L, const char* fn,
+                              lua_Integer pid, const char* cmd)
+{
+    if (!L) {
+        return 0;
+    }
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) {
+        lua_pop(L, 1);
+        return 0;
+    }
+    lua_pushinteger(L, pid);
+    lua_pushstring(L, cmd ? cmd : "");
+    if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int handled = lua_isboolean(L, -1) && lua_toboolean(L, -1);
+    lua_settop(L, base);
+    return handled;
+}
+
+// ============================================================================
+// Map hook dispatch helpers — iterate _registered_hooks[event]
+// ============================================================================
+
+static void dispatch_hooks_void_0(lua_State* L, const char* event)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
+static void dispatch_hooks_void_1s(lua_State* L, const char* event, const char* s)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushstring(L, s ? s : "");
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
+static void dispatch_hooks_void_1i(lua_State* L, const char* event, lua_Integer a)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, a);
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
+static void dispatch_hooks_void_1i_1s(lua_State* L, const char* event,
+                                       lua_Integer a, const char* s)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, a);
+        lua_pushstring(L, s ? s : "");
+        if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
+static void dispatch_hooks_void_1i_3f(lua_State* L, const char* event,
+                                       lua_Integer a,
+                                       lua_Number x, lua_Number y, lua_Number z)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, a);
+        lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
+        if (lua_pcall(L, 4, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
+// Returns 1 if any handler returned false (deny), 0 otherwise.
+static int dispatch_hooks_deny_4i(lua_State* L, const char* event,
+                                   lua_Integer a, lua_Integer b,
+                                   lua_Integer c, lua_Integer d)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, a); lua_pushinteger(L, b);
+        lua_pushinteger(L, c); lua_pushinteger(L, d);
+        if (lua_pcall(L, 4, 1, 0) == LUA_OK) {
+            int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+            lua_pop(L, 1);
+            if (denied) { lua_pop(L, 2); return 1; }
+        } else {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+    return 0;
+}
+
+static int dispatch_hooks_deny_hit(lua_State* L, const char* event,
+                                    lua_Integer shooter, lua_Integer victim,
+                                    lua_Integer hit_type, lua_Integer weapon)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, shooter); lua_pushinteger(L, victim);
+        lua_pushinteger(L, hit_type); lua_pushinteger(L, weapon);
+        if (lua_pcall(L, 4, 1, 0) == LUA_OK) {
+            int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+            lua_pop(L, 1);
+            if (denied) { lua_pop(L, 2); return 1; }
+        } else {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+    return 0;
+}
+
+// Block-place hooks version: iterates _registered_hooks["on_block_place"].
+// Returns 1 if denied, 0 if allowed (and possibly modifies block->color).
+// Stops at first handler that returns any value.
+static int dispatch_hooks_block_place(lua_State* L, const char* event,
+                                       lua_Integer pid, block_t* block)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    uint32_t c = block->color;
+    uint8_t br = (c >> 16) & 0xFF;
+    uint8_t bg = (c >>  8) & 0xFF;
+    uint8_t bb =  c        & 0xFF;
+    for (int i = 1; i <= n; i++) {
+        int base = lua_gettop(L);
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, pid);
+        lua_pushinteger(L, block->x);
+        lua_pushinteger(L, block->y);
+        lua_pushinteger(L, block->z);
+        lua_pushinteger(L, br);
+        lua_pushinteger(L, bg);
+        lua_pushinteger(L, bb);
+        if (lua_pcall(L, 7, LUA_MULTRET, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+            continue;
+        }
+        // base points just below the hooks-table entry we rawgeti'd,
+        // but after pcall the function and args are gone. The stack now has:
+        // [..., hooks, hooks[event], <nret return values>]
+        // base was set before rawgeti, so results start at base+1.
+        int nret = lua_gettop(L) - base;
+        if (nret == 0) {
+            // no return value — allow, continue to next handler
+            continue;
+        }
+        if (nret == 1 && lua_isboolean(L, base + 1)) {
+            int denied = !lua_toboolean(L, base + 1);
+            lua_settop(L, base);
+            lua_pop(L, 2); // hooks[event] + hooks
+            return denied;
+        }
+        if (nret >= 3 &&
+            lua_isinteger(L, base + 1) &&
+            lua_isinteger(L, base + 2) &&
+            lua_isinteger(L, base + 3))
+        {
+            int r = (int)lua_tointeger(L, base + 1);
+            int g = (int)lua_tointeger(L, base + 2);
+            int b = (int)lua_tointeger(L, base + 3);
+            lua_settop(L, base);
+            lua_pop(L, 2); // hooks[event] + hooks
+            block->color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+            return 0; // allow with modified color
+        }
+        // unrecognised return — allow, continue
+        lua_settop(L, base);
+    }
+    lua_pop(L, 2); // hooks[event] + hooks
+    return 0;
+}
+
+// Color-change hooks version: iterates _registered_hooks["on_color_change"].
+// Returns 1 if denied, 0 if allowed (and possibly modifies *new_color).
+// Stops at first handler that returns any value.
+static int dispatch_hooks_color_change(lua_State* L, const char* event,
+                                        lua_Integer pid, uint32_t* new_color)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    uint32_t c = *new_color;
+    uint8_t cr = (c >> 16) & 0xFF;
+    uint8_t cg = (c >>  8) & 0xFF;
+    uint8_t cb =  c        & 0xFF;
+    for (int i = 1; i <= n; i++) {
+        int base = lua_gettop(L);
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, pid);
+        lua_pushinteger(L, cr);
+        lua_pushinteger(L, cg);
+        lua_pushinteger(L, cb);
+        if (lua_pcall(L, 4, LUA_MULTRET, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+            continue;
+        }
+        int nret = lua_gettop(L) - base;
+        if (nret == 0) {
+            continue;
+        }
+        if (nret == 1 && lua_isboolean(L, base + 1)) {
+            int denied = !lua_toboolean(L, base + 1);
+            lua_settop(L, base);
+            lua_pop(L, 2); // hooks[event] + hooks
+            return denied;
+        }
+        if (nret >= 3 &&
+            lua_isinteger(L, base + 1) &&
+            lua_isinteger(L, base + 2) &&
+            lua_isinteger(L, base + 3))
+        {
+            int r = (int)lua_tointeger(L, base + 1);
+            int g = (int)lua_tointeger(L, base + 2);
+            int b = (int)lua_tointeger(L, base + 3);
+            lua_settop(L, base);
+            lua_pop(L, 2); // hooks[event] + hooks
+            *new_color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
+            return 0; // allow with modified color
+        }
+        // unrecognised return — allow, continue
+        lua_settop(L, base);
+    }
+    lua_pop(L, 2); // hooks[event] + hooks
+    return 0;
+}
+
+// Command hooks version: iterates _registered_hooks["on_command"].
+// Returns 1 if any handler returned true (handled), 0 otherwise.
+static int dispatch_hooks_command(lua_State* L, const char* event,
+                                   lua_Integer pid, const char* cmd)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, pid);
+        lua_pushstring(L, cmd ? cmd : "");
+        if (lua_pcall(L, 2, 1, 0) == LUA_OK) {
+            int handled = lua_isboolean(L, -1) && lua_toboolean(L, -1);
+            lua_pop(L, 1);
+            if (handled) { lua_pop(L, 2); return 1; }
+        } else {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+    return 0;
+}
+
+// ============================================================================
+// Hook dispatchers (public, called from ScriptingAPI.c)
+// ============================================================================
+
+void lua_hook_server_init(server_t* server)
+{
+    (void)server;
+    dispatch_void_0(g_server_lua, "on_server_init");
+    dispatch_hooks_void_0(g_map_lua, "on_server_init");
+}
+
+void lua_hook_server_shutdown(server_t* server)
+{
+    (void)server;
+    dispatch_void_0(g_server_lua, "on_server_shutdown");
+    dispatch_hooks_void_0(g_map_lua, "on_server_shutdown");
+}
+
+void lua_hook_tick(server_t* server)
+{
+    dispatch_void_0(g_server_lua, "on_tick");
+    dispatch_hooks_void_0(g_map_lua, "on_tick");
+
+    // Dispatch bot controllers — call controller:update(id) or controller(id)
+    player_t *p, *tmp;
+    HASH_ITER(hh, server->players, p, tmp) {
+        if (!p->is_bot || p->state != STATE_READY) {
+            continue;
+        }
+        if (!p->controller_L || p->lua_controller_ref == LUA_NOREF) {
+            continue;
+        }
+        lua_State* L = (lua_State*)p->controller_L;
+        lua_rawgeti(L, LUA_REGISTRYINDEX, p->lua_controller_ref);
+        int t = lua_type(L, -1);
+        if (t == LUA_TFUNCTION) {
+            lua_pushinteger(L, p->id);
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
+                LOG_ERROR("[Bot] controller error (id=%d): %s",
+                          p->id, lua_tostring(L, -1));
+                lua_pop(L, 1);
+            }
+        } else if (t == LUA_TTABLE) {
+            lua_getfield(L, -1, "update");
+            if (lua_isfunction(L, -1)) {
+                lua_pushvalue(L, -2); // self = controller table
+                lua_pushinteger(L, p->id);
+                if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+                    LOG_ERROR("[Bot] controller:update error (id=%d): %s",
+                              p->id, lua_tostring(L, -1));
+                    lua_pop(L, 1);
+                }
+            } else {
+                lua_pop(L, 1); // pop non-function "update"
+            }
+            lua_pop(L, 1); // pop controller table
+        } else {
+            lua_pop(L, 1);
+        }
+    }
+}
+
+void lua_hook_player_connect(server_t* server, player_t* player)
+{
+    (void)server;
+    dispatch_void_1i(g_server_lua, "on_player_connect", player->id);
+    dispatch_hooks_void_1i(g_map_lua, "on_player_connect", player->id);
+}
+
+void lua_hook_player_disconnect(server_t* server, player_t* player, const char* reason)
+{
+    (void)server;
+    dispatch_void_1i_1s(g_server_lua, "on_player_disconnect", player->id, reason);
+    dispatch_hooks_void_1i_1s(g_map_lua, "on_player_disconnect", player->id, reason);
+}
+
+void lua_hook_map_load(server_t* server, const char* map_name)
+{
+    (void)server;
+    dispatch_void_1s(g_server_lua, "on_map_load", map_name);
+    dispatch_hooks_void_1s(g_map_lua, "on_map_load", map_name);
+}
+
+void lua_hook_map_unload(server_t* server, const char* map_name)
+{
+    (void)server;
+    dispatch_void_1s(g_server_lua, "on_map_unload", map_name);
+    dispatch_hooks_void_1s(g_map_lua, "on_map_unload", map_name);
+}
+
+void lua_hook_grenade_explode(server_t* server, player_t* player, vector3f_t pos)
+{
+    (void)server;
+    dispatch_void_1i_3f(g_server_lua, "on_grenade_explode",
+                        player->id, (lua_Number)pos.x, (lua_Number)pos.y, (lua_Number)pos.z);
+    dispatch_hooks_void_1i_3f(g_map_lua, "on_grenade_explode",
+                               player->id, (lua_Number)pos.x, (lua_Number)pos.y, (lua_Number)pos.z);
+}
+
+int lua_hook_block_place(server_t* server, player_t* player, block_t* block)
+{
+    (void)server;
+    if (dispatch_block_place(g_server_lua, "on_block_place", player->id, block)) {
+        return SCRIPTING_DENY;
+    }
+    if (dispatch_hooks_block_place(g_map_lua, "on_block_place", player->id, block)) {
+        return SCRIPTING_DENY;
+    }
+    return SCRIPTING_ALLOW;
+}
+
+int lua_hook_block_destroy(server_t* server, player_t* player, uint8_t tool, block_t* block)
+{
+    (void)server;
+    (void)tool;
+    if (dispatch_deny_4i(g_server_lua, "on_block_destroy",
+                         player->id, block->x, block->y, block->z)) {
+        return SCRIPTING_DENY;
+    }
+    if (dispatch_hooks_deny_4i(g_map_lua, "on_block_destroy",
+                                player->id, block->x, block->y, block->z)) {
+        return SCRIPTING_DENY;
+    }
+    return SCRIPTING_ALLOW;
+}
+
+int lua_hook_player_hit(server_t* server, player_t* shooter, player_t* victim,
+                         uint8_t hit_type, uint8_t weapon)
+{
+    (void)server;
+    if (dispatch_deny_4i_hit(g_server_lua, "on_player_hit",
+                              shooter->id, victim->id, hit_type, weapon)) {
+        return SCRIPTING_DENY;
+    }
+    if (dispatch_hooks_deny_hit(g_map_lua, "on_player_hit",
+                                 shooter->id, victim->id, hit_type, weapon)) {
+        return SCRIPTING_DENY;
+    }
+    return SCRIPTING_ALLOW;
+}
+
+int lua_hook_color_change(server_t* server, player_t* player, uint32_t* new_color)
+{
+    (void)server;
+    if (dispatch_color_change(g_server_lua, "on_color_change", player->id, new_color)) {
+        return SCRIPTING_DENY;
+    }
+    if (dispatch_hooks_color_change(g_map_lua, "on_color_change", player->id, new_color)) {
+        return SCRIPTING_DENY;
+    }
+    return SCRIPTING_ALLOW;
+}
+
+int lua_hook_command(server_t* server, player_t* player, const char* command)
+{
+    (void)server;
+    lua_Integer pid = player ? (lua_Integer)player->id : -1;
+    if (dispatch_command(g_server_lua, "on_command", pid, command)) {
+        return SCRIPTING_CMD_HANDLED;
+    }
+    if (dispatch_hooks_command(g_map_lua, "on_command", pid, command)) {
+        return SCRIPTING_CMD_HANDLED;
+    }
+    return SCRIPTING_CMD_PASS;
+}

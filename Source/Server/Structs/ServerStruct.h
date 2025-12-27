@@ -40,6 +40,8 @@ typedef struct server
     const char*           guard_passwd;
     const char*           trusted_passwd;
     char                  map_name[20];
+    char**                map_scripts;
+    size_t                map_scripts_count;
     char                  server_name[31];
     char                  gamemode_name[7];
     volatile sig_atomic_t running; // volatile keyword is required to have an access to this variable in any thread

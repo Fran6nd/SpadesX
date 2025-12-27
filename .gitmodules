@@ -10,3 +10,6 @@
 [submodule "Extern/tomlc99/tomlc99"]
 	path = Extern/tomlc99/tomlc99
 	url = https://github.com/cktan/tomlc99
+[submodule "Extern/lua54"]
+	path = Extern/lua54
+	url = https://github.com/lua/lua.git

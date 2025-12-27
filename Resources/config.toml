@@ -19,9 +19,11 @@ master = false
 # Map rotation
 # List the maps you want to use (must exist in Resources/maps/)
 # Each map must be in its own folder: Resources/maps/MapName/MapName.{vxl,toml}
-# The folder name, .vxl filename, and .toml filename must match exactly
+# The folder name, .vxl filename, and .toml filename must match exactly.
+# Each entry specifies the map name and an optional list of scripts from map_scripts/ to load.
+# Omit "scripts" to run a map with no scripts.
 maps = [
-    "Border_Hallway"
+    { name = "Border_Hallway", scripts = ["headshot_only.lua", "restock_command.lua", "bots.lua"] },
 ]
 
 # Rotation modes:

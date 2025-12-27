@@ -5,6 +5,7 @@
 #include <Server/ParseConvert.h>
 #include <Server/Server.h>
 #include <Server/Structs/ServerStruct.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Util/Enums.h>
 #include <Util/JSONHelpers.h>
 #include <Util/Log.h>
@@ -254,6 +255,12 @@ void command_handle(server_t* server, player_t* player, char* message, uint8_t c
     command_t* cmd;
     HASH_FIND_STR(server->cmds_map, command, cmd);
     if (cmd == NULL) {
+        // Try plugin handlers
+        if (scripting_on_command(server, player, message) == SCRIPTING_CMD_HANDLED) {
+            free(command);
+            return;
+        }
+        // No plugin handled it either
         free(command);
         return;
     }

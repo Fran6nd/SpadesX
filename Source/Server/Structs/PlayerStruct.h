@@ -83,8 +83,11 @@ typedef struct player
     uint8_t                  airborne;
     uint8_t                  wade;
     uint8_t                  next_shot_invalid;
+    uint8_t                  is_bot;
     char                     name[PLAYER_NAME_STRLEN + 1];
     char                     os_info[255];
+    void*                    controller_L;       // lua_State* owning the controller ref (void* to avoid lua.h in this header)
+    int                      lua_controller_ref; // LUA_REGISTRYINDEX ref; LUA_NOREF (-2) if none
 } player_t;
 
 #endif

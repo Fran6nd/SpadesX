@@ -8,6 +8,7 @@
 #include <Server/ParseConvert.h>
 #include <Server/Ping.h>
 #include <Server/Player.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Server.h>
 #include <Server/Structs/GrenadeStruct.h>
 #include <Server/Structs/ServerStruct.h>
@@ -63,6 +64,7 @@ static void _string_nodes_free(string_node_t* root)
     DL_FOREACH_SAFE(root, el, tmp)
     {
         free(el->string);
+        free(el->scripts);
         DL_DELETE(root, el);
         free(el);
     }
@@ -145,6 +147,8 @@ static void _server_init(server_t*   server,
     }
     snprintf(
     server->map_name, fmin(strlen(server->s_map.current_map->string) + 1, 20), "%s", server->s_map.current_map->string);
+    server->map_scripts       = server->s_map.current_map->scripts;
+    server->map_scripts_count = server->s_map.current_map->scripts_count;
     LOG_STATUS("Selecting %s as map", server->map_name);
 
     snprintf(vxl_map, 64, "%s.vxl", server->s_map.current_map->string);
@@ -258,12 +262,21 @@ static void _server_init(server_t*   server,
 
     memcpy(server->server_name, serverName, strlen(serverName));
     server->server_name[strlen(serverName)] = '\0';
+
+    // Per-map gamemode override: read before freeing the TOML tree.
+    // If the field is absent the server default 'gamemode' is used unchanged.
+    uint8_t effective_gamemode;
+    TOMLH_GET_INT(map_table, effective_gamemode, "gamemode", gamemode, 1);
+
     toml_free(parsed);
-    gamemode_init(server, gamemode);
+    gamemode_init(server, effective_gamemode);
 }
 
 void server_reset(server_t* server)
 {
+    // Unload the current map's script before selecting and loading the next map.
+    scripting_map_unload(server, server->map_name);
+
     _server_init(server,
                  server->protocol.max_players,
                  server->server_name,
@@ -273,6 +286,9 @@ void server_reset(server_t* server)
                  server->protocol.color_team[1].arr,
                  server->protocol.current_gamemode,
                  1);
+
+    // Load the new map's script after _server_init has set server->map_name.
+    scripting_map_load(server, server->map_name, server->map_scripts, server->map_scripts_count);
 }
 
 static void* _world_update(void)
@@ -281,7 +297,7 @@ static void* _world_update(void)
     HASH_ITER(hh, server.players, player, tmp)
     {
         on_player_update(&server, player);
-        if (is_past_join_screen(player)) {
+        if (is_past_join_screen(player) && !player->is_bot) {
             uint64_t time = get_nanos();
             if (time - player->timers.time_since_last_wu >= (uint64_t) (NANO_IN_SECOND / player->ups)) {
                 send_world_update(&server, player);
@@ -314,6 +330,7 @@ static void _server_update(server_t* server, int timeout)
                         LOG_ERROR("Server tried to disconnect non existent player!");
                         return;
                     }
+                    scripting_on_player_disconnect(server, player, "disconnected");
                     send_intel_drop(server, player);
                     send_player_left(server, player);
                     vector3f_t empty   = {0, 0, 0};
@@ -469,6 +486,11 @@ void server_start(server_args args)
     command_populate_all(&server);
     init_packets(&server);
 
+    // Initialize scripting system, fire server init hook, then load map script.
+    scripting_init(&server);
+    scripting_on_server_init(&server);
+    scripting_map_load(&server, server.map_name, server.map_scripts, server.map_scripts_count);
+
     server.master.enable_master_connection = args.master;
     server.manager_passwd                  = args.manager_password;
     server.admin_passwd                    = args.admin_password;
@@ -501,16 +523,24 @@ void server_start(server_args args)
         _server_update(&server, 0);
         _world_update();
         for_players(&server);
+        scripting_on_tick(&server);
         pthread_mutex_unlock(&server_lock);
         sleep(0);
     }
+
+    // Notify scripts of server shutdown.
+    scripting_on_server_shutdown(&server);
 
     // Server is shutting down, kick all players
     player_t *player, *tmp;
     HASH_ITER(hh, server.players, player, tmp)
     {
-        enet_peer_disconnect_now(player->peer, REASON_KICKED);
+        if (!player->is_bot) {
+            enet_peer_disconnect_now(player->peer, REASON_KICKED);
+        }
     }
+
+    scripting_shutdown(&server);
 
     free_all_commands(&server);
     free_all_packets(&server);

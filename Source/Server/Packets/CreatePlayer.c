@@ -18,7 +18,10 @@ void send_create_player(server_t* server, player_t* receiver, player_t* child)
     stream_write_array(&stream, child->name, 16);             // NAME
 
     if (enet_peer_send(receiver->peer, 0, packet) != 0) {
-        LOG_WARNING("Failed to send player state");
+        // Only warn for real players, not bots (bots use dummy peer)
+        if (!receiver->is_bot) {
+            LOG_WARNING("Failed to send player state");
+        }
         enet_packet_destroy(packet);
     }
 }
