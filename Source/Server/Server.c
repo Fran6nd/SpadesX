@@ -174,7 +174,7 @@ static void _server_init(server_t*   server,
     /* [water_damage] */
     uint8_t water_damage_enabled;
     uint8_t water_damage_per_second;
-    TOMLH_GET_INT(map_table, water_damage_enabled, "water_damage_enabled", 0, 1);
+    TOMLH_GET_BOOL(map_table, water_damage_enabled, "water_damage_enabled", 0, 1);
     TOMLH_GET_INT(map_table, water_damage_per_second, "water_damage_per_second", 5, 1);
 
     /* [spawnpoints] */

@@ -10,9 +10,9 @@ hostile. Part of SpadesX entry maps for hallway
 fog_color = [128, 232, 255]
 
 # Water damage configuration (optional)
-# Set water_damage_enabled to 1 to enable water damage
+# Set water_damage_enabled to true to enable water damage
 # water_damage_per_second specifies the damage dealt every second while in water
-water_damage_enabled = 1
+water_damage_enabled = true
 water_damage_per_second = 5
 
 [spawnpoints]
