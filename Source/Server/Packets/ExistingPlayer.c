@@ -2,6 +2,7 @@
 #include <Server/Packets/Packets.h>
 #include <Server/ParseConvert.h>
 #include <Server/Server.h>
+#include <Server/Plugin.h>
 #include <Util/Alloc.h>
 #include <Util/Checks/PlayerChecks.h>
 #include <Util/Enums.h>
@@ -171,6 +172,9 @@ void receive_existing_player(server_t* server, player_t* player, stream_t* data)
                                player->name);
         }
         player->welcome_sent = 1; // So we dont send the message to the player on each time they spawn.
+
+        // Dispatch player connect event to plugins
+        plugin_dispatch_player_connect(server, player);
     }
 
     if (server->protocol.gamemode.intel_held[0] == 0) {
