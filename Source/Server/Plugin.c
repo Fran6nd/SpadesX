@@ -69,6 +69,11 @@ static plugin_result_t api_init_set_intel_position(server_t* server, uint8_t tea
 static plugin_result_t api_broadcast_message(server_t* server, const char* message);
 static plugin_result_t api_register_command(server_t* server, const char* command_name, const char* description,
                                  void (*handler)(server_t*, player_t*, const char*), uint32_t required_permissions);
+static void api_log_message(const char* plugin_name, plugin_log_level_t level, const char* format, ...);
+static void api_log_debug(const char* plugin_name, const char* format, ...);
+static void api_log_info(const char* plugin_name, const char* format, ...);
+static void api_log_warning(const char* plugin_name, const char* format, ...);
+static void api_log_error(const char* plugin_name, const char* format, ...);
 
 // ============================================================================
 // ERROR HANDLING
@@ -133,7 +138,12 @@ static plugin_api_t g_plugin_api = {
     .init_add_block = api_init_add_block,
     .init_set_intel_position = api_init_set_intel_position,
     .broadcast_message = api_broadcast_message,
-    .register_command = api_register_command
+    .register_command = api_register_command,
+    .log_message = api_log_message,
+    .log_debug = api_log_debug,
+    .log_info = api_log_info,
+    .log_warning = api_log_warning,
+    .log_error = api_log_error
 };
 
 // ============================================================================
@@ -741,4 +751,114 @@ static plugin_result_t api_register_command(server_t* server, const char* comman
 
     LOG_INFO("Plugin requested to register command: %s", command_name);
     return PLUGIN_OK;  // Pretend it worked for now
+}
+
+// ============================================================================
+// LOGGING API IMPLEMENTATION
+// ============================================================================
+
+#include <stdarg.h>
+
+static void api_log_message(const char* plugin_name, plugin_log_level_t level, const char* format, ...)
+{
+    if (!plugin_name || !format) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+
+    // Create a buffer for the formatted message
+    char message[1024];
+    vsnprintf(message, sizeof(message), format, args);
+
+    va_end(args);
+
+    // Log with appropriate level and plugin name prefix
+    switch (level) {
+        case PLUGIN_LOG_DEBUG:
+            LOG_DEBUG("[Plugin: %s] %s", plugin_name, message);
+            break;
+        case PLUGIN_LOG_INFO:
+            LOG_INFO("[Plugin: %s] %s", plugin_name, message);
+            break;
+        case PLUGIN_LOG_WARNING:
+            LOG_WARNING("[Plugin: %s] %s", plugin_name, message);
+            break;
+        case PLUGIN_LOG_ERROR:
+        case PLUGIN_LOG_FATAL:
+            LOG_ERROR("[Plugin: %s] %s", plugin_name, message);
+            break;
+        default:
+            LOG_INFO("[Plugin: %s] %s", plugin_name, message);
+            break;
+    }
+}
+
+static void api_log_debug(const char* plugin_name, const char* format, ...)
+{
+    if (!plugin_name || !format) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+
+    char message[1024];
+    vsnprintf(message, sizeof(message), format, args);
+
+    va_end(args);
+
+    LOG_DEBUG("[Plugin: %s] %s", plugin_name, message);
+}
+
+static void api_log_info(const char* plugin_name, const char* format, ...)
+{
+    if (!plugin_name || !format) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+
+    char message[1024];
+    vsnprintf(message, sizeof(message), format, args);
+
+    va_end(args);
+
+    LOG_INFO("[Plugin: %s] %s", plugin_name, message);
+}
+
+static void api_log_warning(const char* plugin_name, const char* format, ...)
+{
+    if (!plugin_name || !format) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+
+    char message[1024];
+    vsnprintf(message, sizeof(message), format, args);
+
+    va_end(args);
+
+    LOG_WARNING("[Plugin: %s] %s", plugin_name, message);
+}
+
+static void api_log_error(const char* plugin_name, const char* format, ...)
+{
+    if (!plugin_name || !format) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, format);
+
+    char message[1024];
+    vsnprintf(message, sizeof(message), format, args);
+
+    va_end(args);
+
+    LOG_ERROR("[Plugin: %s] %s", plugin_name, message);
 }

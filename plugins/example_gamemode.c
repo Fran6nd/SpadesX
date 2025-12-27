@@ -24,6 +24,7 @@ PLUGIN_EXPORT plugin_info_t spadesx_plugin_info = {
 
 // Store the API for later use
 static const plugin_api_t* api = NULL;
+static const char* PLUGIN_NAME = "Example Gamemode";
 
 // ============================================================================
 // PLUGIN LIFECYCLE
@@ -33,16 +34,16 @@ PLUGIN_EXPORT int spadesx_plugin_init(server_t* server, const plugin_api_t* plug
 {
     (void)server;  // Unused
     api = plugin_api;
-    printf("[Example Plugin] Init function called\n");
-    printf("[Example Plugin] API pointer: %p\n", (void*)plugin_api);
-    printf("[Example Plugin] Loaded successfully!\n");
+    api->log_info(PLUGIN_NAME, "Initializing...");
+    api->log_debug(PLUGIN_NAME, "API pointer: %p", (void*)plugin_api);
+    api->log_info(PLUGIN_NAME, "Loaded successfully!");
     return 0;
 }
 
 PLUGIN_EXPORT void spadesx_plugin_shutdown(server_t* server)
 {
     (void)server;  // Unused
-    printf("[Example Plugin] Shutting down\n");
+    api->log_info(PLUGIN_NAME, "Shutting down");
 }
 
 // ============================================================================
@@ -52,17 +53,17 @@ PLUGIN_EXPORT void spadesx_plugin_shutdown(server_t* server)
 // Server initialization - set up the map
 PLUGIN_EXPORT void spadesx_plugin_on_server_init(server_t* server, const plugin_api_t* plugin_api)
 {
-    printf("[Example Plugin] Initializing map...\n");
+    api->log_info(PLUGIN_NAME, "Initializing map...");
 
     map_t* map = plugin_api->get_map(server);
 
     if (!map) {
-        printf("[Example Plugin] ERROR: Map is NULL!\n");
+        api->log_error(PLUGIN_NAME, "Map is NULL!");
         return;
     }
 
     // Create Babel platform (cyan) - smaller test first
-    printf("[Example Plugin] Creating platform...\n");
+    api->log_info(PLUGIN_NAME, "Creating platform...");
     for (int32_t x = 206; x <= 306; x++) {
         for (int32_t y = 240; y <= 272; y++) {
             plugin_api->init_add_block(server, x, y, 1, 0xFF00FFFF);  // Cyan
@@ -70,12 +71,12 @@ PLUGIN_EXPORT void spadesx_plugin_on_server_init(server_t* server, const plugin_
     }
 
     // Set intel positions on top of platform
-    printf("[Example Plugin] Setting intel positions...\n");
+    api->log_info(PLUGIN_NAME, "Setting intel positions...");
     int32_t intel_z = plugin_api->map_find_top_block(map, 255, 255);
     plugin_api->init_set_intel_position(server, 0, 255, 255, intel_z);
     plugin_api->init_set_intel_position(server, 1, 255, 255, intel_z);
 
-    printf("[Example Plugin] Map initialization complete!\n");
+    api->log_info(PLUGIN_NAME, "Map initialization complete!");
 }
 
 // Block destruction check
@@ -155,7 +156,7 @@ PLUGIN_EXPORT void spadesx_plugin_on_player_connect(server_t* server, player_t* 
 {
     (void) server;
     const char* name = api->player_get_name(player);
-    printf("[Example Plugin] Player %s connected\n", name);
+    api->log_info(PLUGIN_NAME, "Player %s connected", name);
 
     // Welcome the player
     api->player_send_notice(player, "Welcome to the Babel-style server!");
@@ -168,7 +169,7 @@ PLUGIN_EXPORT void spadesx_plugin_on_player_disconnect(server_t* server, player_
 {
     (void) server;
     const char* name = api->player_get_name(player);
-    printf("[Example Plugin] Player %s disconnected: %s\n", name, reason);
+    api->log_info(PLUGIN_NAME, "Player %s disconnected: %s", name, reason);
 }
 
 // Player hit handler - only allow headshots
@@ -204,7 +205,7 @@ spadesx_plugin_on_player_hit(server_t* server, player_t* shooter, player_t* vict
             break;
     }
 
-    printf("[Example Plugin] %s hit %s in the %s\n", shooter_name, victim_name, hit_location);
+    api->log_debug(PLUGIN_NAME, "%s hit %s in the %s", shooter_name, victim_name, hit_location);
 
     if (hit_type != 1 && hit_type != 4) { // 1=head, 4=melee
         api->player_send_notice(shooter, "Headshots only!");

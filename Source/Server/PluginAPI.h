@@ -119,6 +119,19 @@ typedef enum {
 const char* plugin_result_to_string(plugin_result_t result);
 
 // ============================================================================
+// LOGGING
+// ============================================================================
+
+// Log levels for plugin logging
+typedef enum {
+    PLUGIN_LOG_DEBUG = 0,    // Debug messages (verbose)
+    PLUGIN_LOG_INFO = 1,     // Informational messages
+    PLUGIN_LOG_WARNING = 2,  // Warning messages
+    PLUGIN_LOG_ERROR = 3,    // Error messages
+    PLUGIN_LOG_FATAL = 4     // Fatal error messages
+} plugin_log_level_t;
+
+// ============================================================================
 // PLUGIN API INTERFACE
 // ============================================================================
 
@@ -241,6 +254,24 @@ typedef struct plugin_api {
         void (*handler)(server_t* server, player_t* player, const char* args),
         uint32_t required_permissions
     );
+
+    // ========================================================================
+    // LOGGING FUNCTIONS
+    // ========================================================================
+
+    // Log a message with specified level
+    // plugin_name: Name of the plugin (typically from plugin_info)
+    // level: Log level (DEBUG, INFO, WARNING, ERROR, FATAL)
+    // format: printf-style format string
+    // ...: Variable arguments for format string
+    void (*log_message)(const char* plugin_name, plugin_log_level_t level, const char* format, ...);
+
+    // Convenience logging functions with automatic plugin name
+    // These require the plugin to have stored its name during init
+    void (*log_debug)(const char* plugin_name, const char* format, ...);
+    void (*log_info)(const char* plugin_name, const char* format, ...);
+    void (*log_warning)(const char* plugin_name, const char* format, ...);
+    void (*log_error)(const char* plugin_name, const char* format, ...);
 
 } plugin_api_t;
 
