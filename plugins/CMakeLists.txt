@@ -23,10 +23,17 @@ if(UNIX AND NOT APPLE)
     target_compile_options(example_gamemode PRIVATE -fPIC)
 endif()
 
-# Set output directory
+# Set output directory to build/plugins (where the server loads from)
 set_target_properties(example_gamemode PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins"
+)
+
+# Also copy to source plugins directory for development
+add_custom_command(TARGET example_gamemode POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:example_gamemode>
+        "${CMAKE_CURRENT_SOURCE_DIR}/$<TARGET_FILE_NAME:example_gamemode>"
 )
 
 # Installation (optional)
