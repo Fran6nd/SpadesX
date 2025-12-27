@@ -36,3 +36,5 @@ plugins/cmake_install.cmake
 plugins/*.so
 plugins/*.dylib
 plugins/*.dll
+plugins/example_gamemode.c
+plugins/plugins/example_gamemode.dylib

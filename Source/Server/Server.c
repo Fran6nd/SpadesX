@@ -474,6 +474,7 @@ void server_start(server_args args)
         _server_update(&server, 0);
         _world_update();
         for_players(&server);
+        plugin_dispatch_tick(&server);
         pthread_mutex_unlock(&server_lock);
         sleep(0);
     }

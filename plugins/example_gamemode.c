@@ -26,6 +26,18 @@ PLUGIN_EXPORT plugin_info_t spadesx_plugin_info = {
 static const plugin_api_t* api = NULL;
 static const char* PLUGIN_NAME = "Example Gamemode";
 
+// Track blocks above players
+typedef struct {
+    uint8_t player_id;
+    int32_t block_x;
+    int32_t block_y;
+    int32_t block_z;
+    uint8_t has_block;
+} player_block_tracker_t;
+
+static player_block_tracker_t player_blocks[32]; // Max 32 players
+static int tick_counter = 0; // For debug logging
+
 // ============================================================================
 // PLUGIN LIFECYCLE
 // ============================================================================
@@ -36,7 +48,14 @@ PLUGIN_EXPORT int spadesx_plugin_init(server_t* server, const plugin_api_t* plug
     api = plugin_api;
     api->log_info(PLUGIN_NAME, "Initializing...");
     api->log_debug(PLUGIN_NAME, "API pointer: %p", (void*)plugin_api);
-    api->log_info(PLUGIN_NAME, "Loaded successfully!");
+
+    // Initialize player block tracking
+    for (int i = 0; i < 32; i++) {
+        player_blocks[i].player_id = i;
+        player_blocks[i].has_block = 0;
+    }
+
+    api->log_info(PLUGIN_NAME, "Loaded successfully! Player trail feature enabled.");
     return 0;
 }
 
@@ -167,9 +186,10 @@ PLUGIN_EXPORT void spadesx_plugin_on_player_connect(server_t* server, player_t* 
 // Player disconnect
 PLUGIN_EXPORT void spadesx_plugin_on_player_disconnect(server_t* server, player_t* player, const char* reason)
 {
-    (void) server;
+    (void)server;
     const char* name = api->player_get_name(player);
     api->log_info(PLUGIN_NAME, "Player %s disconnected: %s", name, reason);
+    // Leave the trail behind - don't remove blocks
 }
 
 // Player hit handler - only allow headshots
@@ -213,6 +233,77 @@ spadesx_plugin_on_player_hit(server_t* server, player_t* shooter, player_t* vict
     }
 
     return PLUGIN_ALLOW;
+}
+
+// Tick handler - runs 60 times per second
+// Update blocks above all players - leaves a trail
+PLUGIN_EXPORT void spadesx_plugin_on_tick(server_t* server)
+{
+    tick_counter++;
+
+    // Debug log every 5 seconds (60 ticks/sec * 5 = 300 ticks)
+    if (tick_counter % 300 == 0) {
+        api->log_info(PLUGIN_NAME, "Tick handler running (tick %d)", tick_counter);
+    }
+
+    // Iterate through all possible player IDs
+    for (uint8_t i = 0; i < 32; i++) {
+        player_t* player = api->get_player(server, i);
+
+        // Skip if player doesn't exist or is dead
+        if (!player) {
+            // Just reset tracking, don't remove blocks (leave the trail)
+            player_blocks[i].has_block = 0;
+            continue;
+        }
+
+        // Get player position
+        vector3f_t pos = api->player_get_position(player);
+
+        // Log first time we see this player
+        if (!player_blocks[i].has_block) {
+            const char* name = api->player_get_name(player);
+            api->log_info(PLUGIN_NAME, "Found player %s (ID %d) at position (%.1f, %.1f, %.1f)",
+                         name, i, pos.x, pos.y, pos.z);
+        }
+
+        // Calculate block position (3 meters above player's head)
+        // In Ace of Spades, Z increases downward, so we subtract 3
+        int32_t block_x = (int32_t)(pos.x);
+        int32_t block_y = (int32_t)(pos.y);
+        int32_t block_z = (int32_t)(pos.z) - 3;
+
+        // Check if block position changed
+        int position_changed = 0;
+        if (player_blocks[i].has_block) {
+            if (player_blocks[i].block_x != block_x ||
+                player_blocks[i].block_y != block_y ||
+                player_blocks[i].block_z != block_z) {
+                position_changed = 1;
+            }
+        } else {
+            position_changed = 1;
+        }
+
+        // Only place block if position changed (leave trail behind)
+        if (position_changed) {
+            map_t* map = api->get_map(server);
+            if (api->map_is_valid_pos(map, block_x, block_y, block_z)) {
+                // Use a bright color (yellow) so it's easy to see
+                uint32_t color = 0xFFFFFF00; // Yellow (ARGB format)
+
+                plugin_result_t result = api->map_set_block(server, block_x, block_y, block_z, color);
+
+
+                // Update tracking
+                player_blocks[i].block_x = block_x;
+                player_blocks[i].block_y = block_y;
+                player_blocks[i].block_z = block_z;
+                player_blocks[i].has_block = 1;
+            } else {
+            }
+        }
+    }
 }
 
 // All functions are exported directly with PLUGIN_EXPORT above

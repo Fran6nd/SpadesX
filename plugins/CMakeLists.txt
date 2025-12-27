@@ -24,9 +24,11 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Set output directory to build/plugins (where the server loads from)
+# Server runs from build/ and looks for plugins/example_gamemode.dylib
 set_target_properties(example_gamemode PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins"
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins"
 )
 
 # Also copy to source plugins directory for development
