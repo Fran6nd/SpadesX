@@ -241,10 +241,6 @@ PLUGIN_EXPORT void spadesx_plugin_on_tick(server_t* server)
 {
     tick_counter++;
 
-    // Debug log every 5 seconds (60 ticks/sec * 5 = 300 ticks)
-    if (tick_counter % 300 == 0) {
-        api->log_info(PLUGIN_NAME, "Tick handler running (tick %d)", tick_counter);
-    }
 
     // Iterate through all possible player IDs
     for (uint8_t i = 0; i < 32; i++) {
@@ -260,12 +256,6 @@ PLUGIN_EXPORT void spadesx_plugin_on_tick(server_t* server)
         // Get player position
         vector3f_t pos = api->player_get_position(player);
 
-        // Log first time we see this player
-        if (!player_blocks[i].has_block) {
-            const char* name = api->player_get_name(player);
-            api->log_info(PLUGIN_NAME, "Found player %s (ID %d) at position (%.1f, %.1f, %.1f)",
-                         name, i, pos.x, pos.y, pos.z);
-        }
 
         // Calculate block position (3 meters above player's head)
         // In Ace of Spades, Z increases downward, so we subtract 3
