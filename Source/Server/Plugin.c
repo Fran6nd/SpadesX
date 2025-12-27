@@ -9,6 +9,7 @@
 #include "Map.h"
 #include "Util/Log.h"
 #include "Util/Uthash.h"
+#include "Util/Notice.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,6 +36,9 @@
 
 // Global plugin list
 static plugin_t* g_plugins = NULL;
+
+// Global server reference for API functions that need it
+static server_t* g_server = NULL;
 
 // Forward declarations for API implementation
 static player_t* api_get_player(server_t* server, uint8_t player_id);
@@ -100,6 +104,9 @@ static plugin_api_t g_plugin_api = {
 void plugin_system_init(server_t* server)
 {
     LOG_INFO("Initializing plugin system");
+
+    // Store server reference for API functions
+    g_server = server;
 
     // TODO: Read plugin list from config.toml
     // For now, try to load the example plugin if it exists
@@ -424,20 +431,17 @@ static void api_player_set_color(player_t* player, uint32_t color)
 
 static void api_player_restock(player_t* player)
 {
-    if (player) {
+    if (player && g_server) {
         player->blocks = 50;
         player->grenades = 3;
-        // TODO: Send restock packet
-        // send_restock(server, player);
+        send_restock(g_server, player);
     }
 }
 
 static void api_player_send_notice(player_t* player, const char* message)
 {
     if (player && message) {
-        // TODO: Send chat message to the player
-        // For now, just log it
-        LOG_INFO("Notice to %s: %s", player->name, message);
+        send_server_notice(player, 0, "%s", message);
     }
 }
 
@@ -549,8 +553,7 @@ static void api_init_set_intel_position(server_t* server, uint8_t team_id, int32
 static void api_broadcast_message(server_t* server, const char* message)
 {
     if (server && message) {
-        // TODO: Implement broadcast message
-        LOG_INFO("Broadcast: %s", message);
+        broadcast_server_notice(server, 0, "%s", message);
     }
 }
 
