@@ -724,21 +724,41 @@ static plugin_result_t api_map_set_block(server_t* server, int32_t x, int32_t y,
     mapvxl_set_color(&server->s_map.map, x, y, z, color);
 
     // Send block update to all players
-    // We need a dummy player for the packet - use the first available player or create a temporary one
-    player_t* dummy_player = NULL;
-    player_t* p;
-    player_t* tmp;
-    HASH_ITER(hh, server->players, p, tmp) {
-        dummy_player = p;
-        break;
-    }
+    // Use player ID 33 (invalid/server ID) so clients won't decrement any player's block count
+    // The Ace of Spades protocol only supports 32 players (IDs 0-31)
+    if (server->protocol.num_players > 0) {
+        ENetPacket* packet = enet_packet_create(NULL, 15, ENET_PACKET_FLAG_RELIABLE);
+        stream_t stream = {packet->data, packet->dataLength, 0};
+        stream_write_u8(&stream, PACKET_TYPE_BLOCK_ACTION);
+        stream_write_u8(&stream, 33);  // Server/invalid player ID
+        stream_write_u8(&stream, BLOCKACTION_BUILD);
+        stream_write_u32(&stream, x);
+        stream_write_u32(&stream, y);
+        stream_write_u32(&stream, z);
 
-    if (dummy_player) {
-        // Temporarily set the player's tool color to the block color for the packet
-        color_t old_color = dummy_player->tool_color;
-        dummy_player->tool_color.raw = color;
-        send_block_action(server, dummy_player, BLOCKACTION_BUILD, x, y, z);
-        dummy_player->tool_color = old_color;
+        uint8_t sent = 0;
+        player_t* p;
+        player_t* tmp;
+        HASH_ITER(hh, server->players, p, tmp) {
+            if (is_past_state_data(p)) {
+                if (enet_peer_send(p->peer, 0, packet) == 0) {
+                    sent = 1;
+                }
+            } else if (p->state == STATE_STARTING_MAP || p->state == STATE_LOADING_CHUNKS) {
+                // Store in block buffer for players still loading
+                block_node_t* node = (block_node_t*) spadesx_malloc(sizeof(*node));
+                node->position.x = x;
+                node->position.y = y;
+                node->position.z = z;
+                node->color.raw = color;
+                node->type = BLOCKACTION_BUILD;
+                node->sender_id = 33;  // Server ID
+                LL_APPEND(p->blockBuffer, node);
+            }
+        }
+        if (sent == 0) {
+            enet_packet_destroy(packet);
+        }
     }
 
     return PLUGIN_OK;
@@ -758,16 +778,40 @@ static plugin_result_t api_map_remove_block(server_t* server, int32_t x, int32_t
     mapvxl_set_air(&server->s_map.map, x, y, z);
 
     // Send block destroy action to all players
-    player_t* dummy_player = NULL;
-    player_t* p;
-    player_t* tmp;
-    HASH_ITER(hh, server->players, p, tmp) {
-        dummy_player = p;
-        break;
-    }
+    // Use player ID 33 (invalid/server ID) so clients won't affect any player's block count
+    if (server->protocol.num_players > 0) {
+        ENetPacket* packet = enet_packet_create(NULL, 15, ENET_PACKET_FLAG_RELIABLE);
+        stream_t stream = {packet->data, packet->dataLength, 0};
+        stream_write_u8(&stream, PACKET_TYPE_BLOCK_ACTION);
+        stream_write_u8(&stream, 33);  // Server/invalid player ID
+        stream_write_u8(&stream, BLOCKACTION_DESTROY_ONE);
+        stream_write_u32(&stream, x);
+        stream_write_u32(&stream, y);
+        stream_write_u32(&stream, z);
 
-    if (dummy_player) {
-        send_block_action(server, dummy_player, BLOCKACTION_DESTROY_ONE, x, y, z);
+        uint8_t sent = 0;
+        player_t* p;
+        player_t* tmp;
+        HASH_ITER(hh, server->players, p, tmp) {
+            if (is_past_state_data(p)) {
+                if (enet_peer_send(p->peer, 0, packet) == 0) {
+                    sent = 1;
+                }
+            } else if (p->state == STATE_STARTING_MAP || p->state == STATE_LOADING_CHUNKS) {
+                // Store in block buffer for players still loading
+                block_node_t* node = (block_node_t*) spadesx_malloc(sizeof(*node));
+                node->position.x = x;
+                node->position.y = y;
+                node->position.z = z;
+                node->color.raw = 0;  // Color not needed for destroy
+                node->type = BLOCKACTION_DESTROY_ONE;
+                node->sender_id = 33;  // Server ID
+                LL_APPEND(p->blockBuffer, node);
+            }
+        }
+        if (sent == 0) {
+            enet_packet_destroy(packet);
+        }
     }
 
     return PLUGIN_OK;
