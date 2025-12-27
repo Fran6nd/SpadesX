@@ -344,42 +344,50 @@ typedef int (*plugin_on_color_change_fn)(
 // PLUGIN EXPORT MACROS
 // ============================================================================
 
-// Use these macros to export your plugin functions
-
+// Platform-specific export attribute for plugin symbols
 #ifdef _WIN32
     #define PLUGIN_EXPORT __declspec(dllexport)
 #else
     #define PLUGIN_EXPORT __attribute__((visibility("default")))
 #endif
 
-// Export plugin info
-#define PLUGIN_INFO(name, version, author, description) \
-    PLUGIN_EXPORT plugin_info_t spadesx_plugin_info = { \
-        .name = name, \
-        .version = version, \
-        .author = author, \
-        .description = description, \
-        .api_version = SPADESX_PLUGIN_API_VERSION \
-    };
-
-// Export lifecycle functions
-// Note: Don't use these macros - export functions directly with PLUGIN_EXPORT
-// These are deprecated and cause bus errors on some platforms
-#define PLUGIN_INIT(func)     PLUGIN_EXPORT plugin_init_fn spadesx_plugin_init = func;
-#define PLUGIN_SHUTDOWN(func) PLUGIN_EXPORT plugin_shutdown_fn spadesx_plugin_shutdown = func;
-
-// Export event handlers
-#define PLUGIN_ON_SERVER_INIT(func)       PLUGIN_EXPORT plugin_on_server_init_fn spadesx_plugin_on_server_init = func;
-#define PLUGIN_ON_SERVER_SHUTDOWN(func)   PLUGIN_EXPORT plugin_on_server_shutdown_fn spadesx_plugin_on_server_shutdown = func;
-#define PLUGIN_ON_BLOCK_DESTROY(func)     PLUGIN_EXPORT plugin_on_block_destroy_fn spadesx_plugin_on_block_destroy = func;
-#define PLUGIN_ON_BLOCK_PLACE(func)       PLUGIN_EXPORT plugin_on_block_place_fn spadesx_plugin_on_block_place = func;
-#define PLUGIN_ON_COMMAND(func)           PLUGIN_EXPORT plugin_on_command_fn spadesx_plugin_on_command = func;
-#define PLUGIN_ON_PLAYER_CONNECT(func)    PLUGIN_EXPORT plugin_on_player_connect_fn spadesx_plugin_on_player_connect = func;
-#define PLUGIN_ON_PLAYER_DISCONNECT(func) PLUGIN_EXPORT plugin_on_player_disconnect_fn spadesx_plugin_on_player_disconnect = func;
-#define PLUGIN_ON_GRENADE_EXPLODE(func)   PLUGIN_EXPORT plugin_on_grenade_explode_fn spadesx_plugin_on_grenade_explode = func;
-#define PLUGIN_ON_TICK(func)              PLUGIN_EXPORT plugin_on_tick_fn spadesx_plugin_on_tick = func;
-#define PLUGIN_ON_PLAYER_HIT(func)        PLUGIN_EXPORT plugin_on_player_hit_fn spadesx_plugin_on_player_hit = func;
-#define PLUGIN_ON_COLOR_CHANGE(func)      PLUGIN_EXPORT plugin_on_color_change_fn spadesx_plugin_on_color_change = func;
+// ============================================================================
+// HOW TO CREATE A PLUGIN
+// ============================================================================
+//
+// 1. Export plugin metadata:
+//    PLUGIN_EXPORT plugin_info_t spadesx_plugin_info = {
+//        .name = "My Plugin",
+//        .version = "1.0.0",
+//        .author = "Your Name",
+//        .description = "Plugin description",
+//        .api_version = SPADESX_PLUGIN_API_VERSION
+//    };
+//
+// 2. Export required lifecycle functions:
+//    PLUGIN_EXPORT int spadesx_plugin_init(server_t* server, const plugin_api_t* api) {
+//        // Initialize your plugin
+//        return 0;  // Return 0 on success, non-zero on failure
+//    }
+//
+//    PLUGIN_EXPORT void spadesx_plugin_shutdown(server_t* server) {
+//        // Clean up your plugin
+//    }
+//
+// 3. Export optional event handlers (only the ones you need):
+//    PLUGIN_EXPORT void spadesx_plugin_on_server_init(server_t* server, const plugin_api_t* api) { }
+//    PLUGIN_EXPORT int spadesx_plugin_on_block_destroy(server_t* server, player_t* player, uint8_t tool, block_t* block) { }
+//    PLUGIN_EXPORT int spadesx_plugin_on_block_place(server_t* server, player_t* player, block_t* block) { }
+//    PLUGIN_EXPORT int spadesx_plugin_on_command(server_t* server, player_t* player, const char* command) { }
+//    PLUGIN_EXPORT void spadesx_plugin_on_player_connect(server_t* server, player_t* player) { }
+//    PLUGIN_EXPORT void spadesx_plugin_on_player_disconnect(server_t* server, player_t* player, const char* reason) { }
+//    PLUGIN_EXPORT void spadesx_plugin_on_grenade_explode(server_t* server, player_t* player, vector3f_t position) { }
+//    PLUGIN_EXPORT void spadesx_plugin_on_tick(server_t* server) { }
+//    PLUGIN_EXPORT int spadesx_plugin_on_player_hit(server_t* server, player_t* shooter, player_t* victim, uint8_t hit_type, uint8_t weapon) { }
+//    PLUGIN_EXPORT int spadesx_plugin_on_color_change(server_t* server, player_t* player, uint32_t* new_color) { }
+//
+// See plugins/example_gamemode.c for a complete working example.
+// ============================================================================
 
 #ifdef __cplusplus
 }
