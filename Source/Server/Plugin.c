@@ -28,6 +28,7 @@
     #define DLERROR()       "Windows LoadLibrary error"
 #else
     #include <dlfcn.h>
+    #include <dirent.h>
     #ifdef __APPLE__
         #define DLOPEN(path)    dlopen(path, RTLD_NOW | RTLD_LOCAL | RTLD_FIRST)
     #else
@@ -162,6 +163,22 @@ static plugin_api_t g_plugin_api = {
 // PLUGIN SYSTEM MANAGEMENT
 // ============================================================================
 
+// Helper function to check if a filename has a plugin extension
+static int is_plugin_file(const char* filename)
+{
+    if (!filename) return 0;
+
+    size_t len = strlen(filename);
+
+#ifdef __APPLE__
+    return (len > 6 && strcmp(filename + len - 6, ".dylib") == 0);
+#elif defined(_WIN32)
+    return (len > 4 && strcmp(filename + len - 4, ".dll") == 0);
+#else
+    return (len > 3 && strcmp(filename + len - 3, ".so") == 0);
+#endif
+}
+
 void plugin_system_init(server_t* server)
 {
     LOG_INFO("Initializing plugin system");
@@ -169,22 +186,70 @@ void plugin_system_init(server_t* server)
     // Store server reference for API functions
     g_server = server;
 
-    // TODO: Read plugin list from config.toml
-    // For now, try to load the example plugin if it exists
+    const char* plugin_dir = "plugins";
+    int plugins_loaded = 0;
 
-#ifdef __APPLE__
-    const char* plugin_path = "plugins/example_gamemode.dylib";
-#elif defined(_WIN32)
-    const char* plugin_path = "plugins/example_gamemode.dll";
+#ifdef _WIN32
+    // Windows directory scanning
+    WIN32_FIND_DATAA find_data;
+    char search_path[512];
+    snprintf(search_path, sizeof(search_path), "%s\\*.dll", plugin_dir);
+
+    HANDLE hFind = FindFirstFileA(search_path, &find_data);
+    if (hFind != INVALID_HANDLE_VALUE) {
+        do {
+            if (!(find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                char plugin_path[512];
+                snprintf(plugin_path, sizeof(plugin_path), "%s\\%s", plugin_dir, find_data.cFileName);
+
+                LOG_INFO("Found plugin: %s", find_data.cFileName);
+                if (plugin_load(server, plugin_path) == 0) {
+                    plugins_loaded++;
+                    LOG_INFO("Successfully loaded plugin from %s", plugin_path);
+                } else {
+                    LOG_WARNING("Failed to load plugin from %s", plugin_path);
+                }
+            }
+        } while (FindNextFileA(hFind, &find_data) != 0);
+        FindClose(hFind);
+    } else {
+        LOG_WARNING("Could not open plugins directory: %s", plugin_dir);
+    }
 #else
-    const char* plugin_path = "plugins/example_gamemode.so";
+    // Unix/Linux/macOS directory scanning
+    DIR* dir = opendir(plugin_dir);
+    if (dir) {
+        struct dirent* entry;
+        while ((entry = readdir(dir)) != NULL) {
+            // Skip . and .. directories
+            if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+                continue;
+            }
+
+            // Check if file has plugin extension
+            if (is_plugin_file(entry->d_name)) {
+                char plugin_path[512];
+                snprintf(plugin_path, sizeof(plugin_path), "%s/%s", plugin_dir, entry->d_name);
+
+                LOG_INFO("Found plugin: %s", entry->d_name);
+                if (plugin_load(server, plugin_path) == 0) {
+                    plugins_loaded++;
+                    LOG_INFO("Successfully loaded plugin from %s", plugin_path);
+                } else {
+                    LOG_WARNING("Failed to load plugin from %s", plugin_path);
+                }
+            }
+        }
+        closedir(dir);
+    } else {
+        LOG_WARNING("Could not open plugins directory: %s (this is ok if you don't have plugins)", plugin_dir);
+    }
 #endif
 
-    // Try to load the example plugin
-    if (plugin_load(server, plugin_path) == 0) {
-        LOG_INFO("Successfully loaded plugin from %s", plugin_path);
+    if (plugins_loaded == 0) {
+        LOG_INFO("No plugins loaded");
     } else {
-        LOG_WARNING("Could not load plugin from %s (this is ok if you don't have plugins)", plugin_path);
+        LOG_INFO("Successfully loaded %d plugin(s)", plugins_loaded);
     }
 }
 

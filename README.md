@@ -1,3 +1,13 @@
+## Plugin System (Development Branch)
+
+This branch implements dynamic plugin loading and management:
+- **Auto-discovery**: Server scans `plugins/` directory and loads all plugins automatically
+- **Multi-plugin support**: Multiple plugins can run simultaneously
+- **Separate builds**: Plugins can be developed and built independently
+- **Template repository**: [spadesx-plugin](https://github.com/Fran6nd/spadesx-plugin) provides standalone plugin development environment. If this work is merged, it should be brought back to spadesx repo.
+
+See `plugins/README.md` and `plugin-template/` for details.
+
 # SpadesX
 [![Build Status](
 https://github.com/SpadesX/SpadesX/actions/workflows/cmake.yml/badge.svg)

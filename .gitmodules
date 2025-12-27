@@ -10,3 +10,6 @@
 [submodule "Extern/tomlc99/tomlc99"]
 	path = Extern/tomlc99/tomlc99
 	url = https://github.com/cktan/tomlc99
+[submodule "plugin-template"]
+	path = plugin-template
+	url = git@github.com:Fran6nd/spadesx-plugin.git
