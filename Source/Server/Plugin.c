@@ -15,6 +15,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
+#include "Util/Alloc.h"
+#include "Structs/CommandStruct.h"
 
 // Platform-specific dynamic library loading
 #ifdef _WIN32
@@ -40,6 +43,15 @@ static plugin_t* g_plugins = NULL;
 
 // Global server reference for API functions that need it
 static server_t* g_server = NULL;
+
+// Plugin command tracking structure
+typedef struct plugin_command {
+    char command_name[30];
+    void (*handler)(server_t*, player_t*, const char*);
+    struct plugin_command* next;
+} plugin_command_t;
+
+static plugin_command_t* g_plugin_commands = NULL;
 
 // Forward declarations for API implementation
 static player_t* api_get_player(server_t* server, uint8_t player_id);
@@ -645,7 +657,24 @@ static plugin_result_t api_map_set_block(server_t* server, int32_t x, int32_t y,
     }
 
     mapvxl_set_color(&server->s_map.map, x, y, z, color);
-    // TODO: Send block update packet to all players
+
+    // Send block update to all players
+    // We need a dummy player for the packet - use the first available player or create a temporary one
+    player_t* dummy_player = NULL;
+    player_t* p;
+    player_t* tmp;
+    HASH_ITER(hh, server->players, p, tmp) {
+        dummy_player = p;
+        break;
+    }
+
+    if (dummy_player) {
+        // Temporarily set the player's tool color to the block color for the packet
+        color_t old_color = dummy_player->tool_color;
+        dummy_player->tool_color.raw = color;
+        send_block_action(server, dummy_player, BLOCKACTION_BUILD, x, y, z);
+        dummy_player->tool_color = old_color;
+    }
 
     return PLUGIN_OK;
 }
@@ -662,7 +691,19 @@ static plugin_result_t api_map_remove_block(server_t* server, int32_t x, int32_t
     }
 
     mapvxl_set_air(&server->s_map.map, x, y, z);
-    // TODO: Send block update packet to all players
+
+    // Send block destroy action to all players
+    player_t* dummy_player = NULL;
+    player_t* p;
+    player_t* tmp;
+    HASH_ITER(hh, server->players, p, tmp) {
+        dummy_player = p;
+        break;
+    }
+
+    if (dummy_player) {
+        send_block_action(server, dummy_player, BLOCKACTION_DESTROY_ONE, x, y, z);
+    }
 
     return PLUGIN_OK;
 }
@@ -734,6 +775,31 @@ static plugin_result_t api_broadcast_message(server_t* server, const char* messa
     return PLUGIN_OK;
 }
 
+// Wrapper function to convert plugin command handler to server command handler
+static void plugin_command_wrapper(void* p_server, command_args_t arguments)
+{
+    server_t* server = (server_t*)p_server;
+
+    // Find the plugin command handler
+    plugin_command_t* cmd;
+    LL_FOREACH(g_plugin_commands, cmd) {
+        if (strcmp(cmd->command_name, arguments.argv[0]) == 0) {
+            // Concatenate all arguments into a single string
+            char args_str[1024] = {0};
+            for (uint32_t i = 1; i < arguments.argc; i++) {
+                if (i > 1) {
+                    strcat(args_str, " ");
+                }
+                strncat(args_str, arguments.argv[i], sizeof(args_str) - strlen(args_str) - 1);
+            }
+
+            // Call the plugin handler
+            cmd->handler(server, arguments.player, args_str);
+            return;
+        }
+    }
+}
+
 static plugin_result_t api_register_command(server_t* server, const char* command_name, const char* description,
                                  void (*handler)(server_t*, player_t*, const char*), uint32_t required_permissions)
 {
@@ -744,13 +810,39 @@ static plugin_result_t api_register_command(server_t* server, const char* comman
         return PLUGIN_ERROR_CMD_INVALID_NAME;
     }
 
-    // TODO: Implement custom command registration
-    // For now, just log that a plugin wants to register a command
-    (void)description;
-    (void)required_permissions;
+    // Check if command already exists
+    command_t* existing_cmd = NULL;
+    HASH_FIND_STR(server->cmds_map, command_name, existing_cmd);
+    if (existing_cmd) {
+        LOG_WARNING("Plugin tried to register already existing command: %s", command_name);
+        return PLUGIN_ERROR_CMD_ALREADY_REGISTERED;
+    }
 
-    LOG_INFO("Plugin requested to register command: %s", command_name);
-    return PLUGIN_OK;  // Pretend it worked for now
+    // Track the plugin command handler
+    plugin_command_t* plugin_cmd = spadesx_malloc(sizeof(plugin_command_t));
+    strncpy(plugin_cmd->command_name, command_name, sizeof(plugin_cmd->command_name) - 1);
+    plugin_cmd->handler = handler;
+    LL_APPEND(g_plugin_commands, plugin_cmd);
+
+    // Register the command in the server's command system
+    command_t* cmd = spadesx_malloc(sizeof(command_t));
+    cmd->execute = plugin_command_wrapper;
+    cmd->parse_args = 1;  // Parse arguments
+    cmd->permissions = required_permissions;
+
+    if (description) {
+        strncpy(cmd->description, description, sizeof(cmd->description) - 1);
+    } else {
+        snprintf(cmd->description, sizeof(cmd->description), "Plugin command: %s", command_name);
+    }
+
+    strncpy(cmd->id, command_name, sizeof(cmd->id) - 1);
+
+    HASH_ADD_STR(server->cmds_map, id, cmd);
+    LL_APPEND(server->cmds_list, cmd);
+
+    LOG_INFO("Plugin registered command: %s", command_name);
+    return PLUGIN_OK;
 }
 
 // ============================================================================
