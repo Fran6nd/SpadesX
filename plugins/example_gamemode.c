@@ -154,6 +154,7 @@ PLUGIN_EXPORT void spadesx_plugin_on_player_connect(server_t* server, player_t* 
     // Welcome the player
     api->player_send_notice(player, "Welcome to the Babel-style server!");
     api->player_send_notice(player, "Type /restock to refill your blocks and grenades");
+    api->player_send_notice(player, "Headshots only mode enabled!");
 }
 
 // Player disconnect
@@ -161,6 +162,49 @@ PLUGIN_EXPORT void spadesx_plugin_on_player_disconnect(server_t* server, player_
 {
     const char* name = api->player_get_name(player);
     printf("[Example Plugin] Player %s disconnected: %s\n", name, reason);
+}
+
+// Player hit handler - only allow headshots
+PLUGIN_EXPORT int
+spadesx_plugin_on_player_hit(server_t* server, player_t* shooter, player_t* victim, uint8_t hit_type, uint8_t weapon)
+{
+    (void) server;
+    (void) weapon;
+
+    const char* shooter_name = api->player_get_name(shooter);
+    const char* victim_name  = api->player_get_name(victim);
+    const char* hit_location;
+
+    // Get hit location name
+    switch (hit_type) {
+        case 0:
+            hit_location = "torso";
+            break;
+        case 1:
+            hit_location = "head";
+            break;
+        case 2:
+            hit_location = "arms";
+            break;
+        case 3:
+            hit_location = "legs";
+            break;
+        case 4:
+            hit_location = "melee";
+            break;
+        default:
+            hit_location = "unknown";
+            break;
+    }
+
+    printf("[Example Plugin] %s hit %s in the %s\n", shooter_name, victim_name, hit_location);
+
+    if (hit_type != 1 && hit_type != 4) { // 1=head, 4=melee
+        api->player_send_notice(shooter, "Headshots only!");
+        return PLUGIN_DENY;
+    }
+
+    return PLUGIN_ALLOW;
 }
 
 // All functions are exported directly with PLUGIN_EXPORT above

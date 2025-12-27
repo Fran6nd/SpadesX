@@ -10,6 +10,7 @@
 #include "Util/Log.h"
 #include "Util/Uthash.h"
 #include "Util/Notice.h"
+#include "Util/Enums.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -214,6 +215,7 @@ int plugin_load(server_t* server, const char* path)
     plugin->on_player_disconnect = (plugin_on_player_disconnect_fn)DLSYM(handle, "spadesx_plugin_on_player_disconnect");
     plugin->on_grenade_explode = (plugin_on_grenade_explode_fn)DLSYM(handle, "spadesx_plugin_on_grenade_explode");
     plugin->on_tick = (plugin_on_tick_fn)DLSYM(handle, "spadesx_plugin_on_tick");
+    plugin->on_player_hit = (plugin_on_player_hit_fn)DLSYM(handle, "spadesx_plugin_on_player_hit");
     LOG_INFO("  Event handlers loaded");
 
     // Call plugin init
@@ -372,6 +374,18 @@ void plugin_dispatch_tick(server_t* server)
             p->on_tick(server);
         }
     }
+}
+
+int plugin_dispatch_player_hit(server_t* server, player_t* shooter, player_t* victim, uint8_t hit_type, uint8_t weapon)
+{
+    for (plugin_t* p = g_plugins; p != NULL; p = p->next) {
+        if (p->on_player_hit) {
+            if (p->on_player_hit(server, shooter, victim, hit_type, weapon) == PLUGIN_DENY) {
+                return PLUGIN_DENY;
+            }
+        }
+    }
+    return PLUGIN_ALLOW;
 }
 
 // ============================================================================

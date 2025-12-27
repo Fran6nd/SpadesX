@@ -265,6 +265,17 @@ typedef void (*plugin_on_grenade_explode_fn)(
 // Called every server tick (60 times per second)
 typedef void (*plugin_on_tick_fn)(server_t* server);
 
+// Called when a player hits another player
+// hit_type: 0=torso, 1=head, 2=arms, 3=legs, 4=melee
+// Return PLUGIN_ALLOW to allow the hit, PLUGIN_DENY to cancel it
+typedef int (*plugin_on_player_hit_fn)(
+    server_t* server,
+    player_t* shooter,
+    player_t* victim,
+    uint8_t hit_type,
+    uint8_t weapon
+);
+
 // ============================================================================
 // PLUGIN EXPORT MACROS
 // ============================================================================
@@ -303,6 +314,7 @@ typedef void (*plugin_on_tick_fn)(server_t* server);
 #define PLUGIN_ON_PLAYER_DISCONNECT(func) PLUGIN_EXPORT plugin_on_player_disconnect_fn spadesx_plugin_on_player_disconnect = func;
 #define PLUGIN_ON_GRENADE_EXPLODE(func)   PLUGIN_EXPORT plugin_on_grenade_explode_fn spadesx_plugin_on_grenade_explode = func;
 #define PLUGIN_ON_TICK(func)              PLUGIN_EXPORT plugin_on_tick_fn spadesx_plugin_on_tick = func;
+#define PLUGIN_ON_PLAYER_HIT(func)        PLUGIN_EXPORT plugin_on_player_hit_fn spadesx_plugin_on_player_hit = func;
 
 #ifdef __cplusplus
 }
