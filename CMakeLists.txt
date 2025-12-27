@@ -34,6 +34,7 @@ target_link_libraries(SpadesX
 )
 
 add_subdirectory(Source)
+add_subdirectory(plugins)
 
 set_target_properties(SpadesX Util Server
   PROPERTIES
