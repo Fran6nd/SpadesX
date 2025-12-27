@@ -49,26 +49,62 @@ static uint8_t api_player_get_tool(player_t* player);
 static uint8_t api_player_get_blocks(player_t* player);
 static uint8_t api_player_get_grenades(player_t* player);
 static uint32_t api_player_get_color(player_t* player);
-static void api_player_set_color(player_t* player, uint32_t color);
-static void api_player_set_color_broadcast(server_t* server, player_t* player, uint32_t color);
-static void api_player_restock(player_t* player);
-static void api_player_send_notice(player_t* player, const char* message);
-static void api_player_kill(player_t* player);
-static void api_player_set_hp(player_t* player, uint8_t hp);
+static plugin_result_t api_player_set_color(player_t* player, uint32_t color);
+static plugin_result_t api_player_set_color_broadcast(server_t* server, player_t* player, uint32_t color);
+static plugin_result_t api_player_restock(player_t* player);
+static plugin_result_t api_player_send_notice(player_t* player, const char* message);
+static plugin_result_t api_player_kill(player_t* player);
+static plugin_result_t api_player_set_hp(player_t* player, uint8_t hp);
 static uint8_t api_player_get_hp(player_t* player);
 static vector3f_t api_player_get_position(player_t* player);
-static void api_player_set_position(player_t* player, vector3f_t position);
+static plugin_result_t api_player_set_position(player_t* player, vector3f_t position);
 static map_t* api_get_map(server_t* server);
 static uint32_t api_map_get_block(map_t* map, int32_t x, int32_t y, int32_t z);
-static void api_map_set_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
-static void api_map_remove_block(server_t* server, int32_t x, int32_t y, int32_t z);
+static plugin_result_t api_map_set_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
+static plugin_result_t api_map_remove_block(server_t* server, int32_t x, int32_t y, int32_t z);
 static int32_t api_map_find_top_block(map_t* map, int32_t x, int32_t y);
 static int api_map_is_valid_pos(map_t* map, int32_t x, int32_t y, int32_t z);
-static void api_init_add_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
-static void api_init_set_intel_position(server_t* server, uint8_t team_id, int32_t x, int32_t y, int32_t z);
-static void api_broadcast_message(server_t* server, const char* message);
-static int api_register_command(server_t* server, const char* command_name, const char* description,
+static plugin_result_t api_init_add_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
+static plugin_result_t api_init_set_intel_position(server_t* server, uint8_t team_id, int32_t x, int32_t y, int32_t z);
+static plugin_result_t api_broadcast_message(server_t* server, const char* message);
+static plugin_result_t api_register_command(server_t* server, const char* command_name, const char* description,
                                  void (*handler)(server_t*, player_t*, const char*), uint32_t required_permissions);
+
+// ============================================================================
+// ERROR HANDLING
+// ============================================================================
+
+const char* plugin_result_to_string(plugin_result_t result)
+{
+    switch (result) {
+        case PLUGIN_OK: return "Success";
+        case PLUGIN_ALLOW: return "Allow";
+        case PLUGIN_DENY: return "Deny";
+        case PLUGIN_ERROR: return "Generic error";
+        case PLUGIN_ERROR_INVALID_PARAM: return "Invalid parameter";
+        case PLUGIN_ERROR_NULL_POINTER: return "NULL pointer";
+        case PLUGIN_ERROR_OUT_OF_RANGE: return "Value out of range";
+        case PLUGIN_ERROR_NOT_FOUND: return "Not found";
+        case PLUGIN_ERROR_PERMISSION_DENIED: return "Permission denied";
+        case PLUGIN_ERROR_INVALID_STATE: return "Invalid state";
+        case PLUGIN_ERROR_PLAYER_NOT_FOUND: return "Player not found";
+        case PLUGIN_ERROR_PLAYER_DEAD: return "Player is dead";
+        case PLUGIN_ERROR_PLAYER_DISCONNECTED: return "Player disconnected";
+        case PLUGIN_ERROR_INVALID_TEAM: return "Invalid team ID";
+        case PLUGIN_ERROR_INVALID_HP: return "Invalid HP value";
+        case PLUGIN_ERROR_MAP_OUT_OF_BOUNDS: return "Map coordinates out of bounds";
+        case PLUGIN_ERROR_MAP_INVALID_COLOR: return "Invalid color value";
+        case PLUGIN_ERROR_MAP_NO_BLOCK: return "No block at position";
+        case PLUGIN_ERROR_CMD_ALREADY_REGISTERED: return "Command already registered";
+        case PLUGIN_ERROR_CMD_INVALID_NAME: return "Invalid command name";
+        case PLUGIN_ERROR_CMD_TOO_MANY: return "Too many commands registered";
+        default: return "Unknown error code";
+    }
+}
+
+// ============================================================================
+// PLUGIN API INSTANCE
+// ============================================================================
 
 // Global plugin API instance
 static plugin_api_t g_plugin_api = {
@@ -451,58 +487,91 @@ static uint32_t api_player_get_color(player_t* player)
     return player ? player->tool_color.raw : 0;
 }
 
-static void api_player_set_color(player_t* player, uint32_t color)
+static plugin_result_t api_player_set_color(player_t* player, uint32_t color)
 {
-    if (player) {
-        player->tool_color.raw = color;
+    if (!player) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+    player->tool_color.raw = color;
+    return PLUGIN_OK;
 }
 
-static void api_player_set_color_broadcast(server_t* server, player_t* player, uint32_t color)
+static plugin_result_t api_player_set_color_broadcast(server_t* server, player_t* player, uint32_t color)
 {
-    if (server && player) {
-        player->tool_color.raw = color;
-        // Send to the player first
-        send_set_color_to_player(server, player, player, player->tool_color);
-        // Then broadcast to all other clients
-        send_set_color(server, player, player->tool_color);
+    if (!server) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+    if (!player) {
+        return PLUGIN_ERROR_NULL_POINTER;
+    }
+
+    player->tool_color.raw = color;
+    // Send to the player first
+    send_set_color_to_player(server, player, player, player->tool_color);
+    // Then broadcast to all other clients
+    send_set_color(server, player, player->tool_color);
+
+    return PLUGIN_OK;
 }
 
-static void api_player_restock(player_t* player)
+static plugin_result_t api_player_restock(player_t* player)
 {
-    if (player && g_server) {
-        player->blocks = 50;
-        player->grenades = 3;
-        send_restock(g_server, player);
+    if (!player) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+    if (!g_server) {
+        return PLUGIN_ERROR_INVALID_STATE;
+    }
+
+    player->blocks = 50;
+    player->grenades = 3;
+    send_restock(g_server, player);
+
+    return PLUGIN_OK;
 }
 
-static void api_player_send_notice(player_t* player, const char* message)
+static plugin_result_t api_player_send_notice(player_t* player, const char* message)
 {
-    if (player && message) {
-        send_server_notice(player, 0, "%s", message);
+    if (!player) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+    if (!message) {
+        return PLUGIN_ERROR_NULL_POINTER;
+    }
+
+    send_server_notice(player, 0, "%s", message);
+    return PLUGIN_OK;
 }
 
-static void api_player_kill(player_t* player)
+static plugin_result_t api_player_kill(player_t* player)
 {
-    if (player && player->alive) {
-        player->hp = 0;
+    if (!player) {
+        return PLUGIN_ERROR_NULL_POINTER;
+    }
+
+    player->hp = 0;
+    player->alive = 0;
+    // The actual kill packet sending should be done through proper channels
+    // This is a simplified version
+
+    return PLUGIN_OK;
+}
+
+static plugin_result_t api_player_set_hp(player_t* player, uint8_t hp)
+{
+    if (!player) {
+        return PLUGIN_ERROR_NULL_POINTER;
+    }
+    if (hp > 100) {
+        return PLUGIN_ERROR_INVALID_HP;
+    }
+
+    player->hp = hp;
+    if (hp == 0) {
         player->alive = 0;
-        // The actual kill packet sending should be done through proper channels
-        // This is a simplified version
     }
-}
 
-static void api_player_set_hp(player_t* player, uint8_t hp)
-{
-    if (player) {
-        player->hp = hp > 100 ? 100 : hp;
-        if (hp == 0) {
-            player->alive = 0;
-        }
-    }
+    return PLUGIN_OK;
 }
 
 static uint8_t api_player_get_hp(player_t* player)
@@ -521,13 +590,24 @@ static vector3f_t api_player_get_position(player_t* player)
     return pos;
 }
 
-static void api_player_set_position(player_t* player, vector3f_t position)
+static plugin_result_t api_player_set_position(player_t* player, vector3f_t position)
 {
-    if (player) {
-        player->movement.position.x = position.x;
-        player->movement.position.y = position.y;
-        player->movement.position.z = position.z;
+    if (!player) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+
+    // Validate position is within reasonable bounds
+    if (position.x < 0 || position.x >= 512 ||
+        position.y < 0 || position.y >= 512 ||
+        position.z < 0 || position.z >= 64) {
+        return PLUGIN_ERROR_OUT_OF_RANGE;
+    }
+
+    player->movement.position.x = position.x;
+    player->movement.position.y = position.y;
+    player->movement.position.z = position.z;
+
+    return PLUGIN_OK;
 }
 
 static map_t* api_get_map(server_t* server)
@@ -543,20 +623,38 @@ static uint32_t api_map_get_block(map_t* map, int32_t x, int32_t y, int32_t z)
     return 0;
 }
 
-static void api_map_set_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color)
+static plugin_result_t api_map_set_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color)
 {
-    if (server) {
-        mapvxl_set_color(&server->s_map.map, x, y, z, color);
-        // TODO: Send block update packet to all players
+    if (!server) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+
+    // Validate coordinates
+    if (x < 0 || x >= 512 || y < 0 || y >= 512 || z < 0 || z >= 64) {
+        return PLUGIN_ERROR_MAP_OUT_OF_BOUNDS;
+    }
+
+    mapvxl_set_color(&server->s_map.map, x, y, z, color);
+    // TODO: Send block update packet to all players
+
+    return PLUGIN_OK;
 }
 
-static void api_map_remove_block(server_t* server, int32_t x, int32_t y, int32_t z)
+static plugin_result_t api_map_remove_block(server_t* server, int32_t x, int32_t y, int32_t z)
 {
-    if (server) {
-        mapvxl_set_air(&server->s_map.map, x, y, z);
-        // TODO: Send block update packet to all players
+    if (!server) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+
+    // Validate coordinates
+    if (x < 0 || x >= 512 || y < 0 || y >= 512 || z < 0 || z >= 64) {
+        return PLUGIN_ERROR_MAP_OUT_OF_BOUNDS;
+    }
+
+    mapvxl_set_air(&server->s_map.map, x, y, z);
+    // TODO: Send block update packet to all players
+
+    return PLUGIN_OK;
 }
 
 static int32_t api_map_find_top_block(map_t* map, int32_t x, int32_t y)
@@ -575,41 +673,72 @@ static int api_map_is_valid_pos(map_t* map, int32_t x, int32_t y, int32_t z)
     return 0;
 }
 
-static void api_init_add_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color)
+static plugin_result_t api_init_add_block(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color)
 {
+    if (!server) {
+        return PLUGIN_ERROR_NULL_POINTER;
+    }
+
+    // Validate coordinates
+    if (x < 0 || x >= 512 || y < 0 || y >= 512 || z < 0 || z >= 64) {
+        return PLUGIN_ERROR_MAP_OUT_OF_BOUNDS;
+    }
+
     // During initialization, we can directly modify the map without sending packets
     mapvxl_set_color(&server->s_map.map, x, y, z, color);
+    return PLUGIN_OK;
 }
 
-static void api_init_set_intel_position(server_t* server, uint8_t team_id, int32_t x, int32_t y, int32_t z)
+static plugin_result_t api_init_set_intel_position(server_t* server, uint8_t team_id, int32_t x, int32_t y, int32_t z)
 {
-    if (team_id < 2) {
-        server->protocol.gamemode.intel[team_id].x = x;
-        server->protocol.gamemode.intel[team_id].y = y;
-        server->protocol.gamemode.intel[team_id].z = z;
+    if (!server) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+
+    if (team_id >= 2) {
+        return PLUGIN_ERROR_INVALID_TEAM;
+    }
+
+    // Validate coordinates are reasonable
+    if (x < 0 || x >= 512 || y < 0 || y >= 512 || z < 0 || z >= 64) {
+        return PLUGIN_ERROR_MAP_OUT_OF_BOUNDS;
+    }
+
+    server->protocol.gamemode.intel[team_id].x = x;
+    server->protocol.gamemode.intel[team_id].y = y;
+    server->protocol.gamemode.intel[team_id].z = z;
+
+    return PLUGIN_OK;
 }
 
-static void api_broadcast_message(server_t* server, const char* message)
+static plugin_result_t api_broadcast_message(server_t* server, const char* message)
 {
-    if (server && message) {
-        broadcast_server_notice(server, 0, "%s", message);
+    if (!server) {
+        return PLUGIN_ERROR_NULL_POINTER;
     }
+    if (!message) {
+        return PLUGIN_ERROR_NULL_POINTER;
+    }
+
+    broadcast_server_notice(server, 0, "%s", message);
+    return PLUGIN_OK;
 }
 
-static int api_register_command(server_t* server, const char* command_name, const char* description,
+static plugin_result_t api_register_command(server_t* server, const char* command_name, const char* description,
                                  void (*handler)(server_t*, player_t*, const char*), uint32_t required_permissions)
 {
+    if (!server) {
+        return PLUGIN_ERROR_NULL_POINTER;
+    }
+    if (!command_name || !handler) {
+        return PLUGIN_ERROR_CMD_INVALID_NAME;
+    }
+
     // TODO: Implement custom command registration
     // For now, just log that a plugin wants to register a command
-    (void)server;
     (void)description;
     (void)required_permissions;
 
-    if (!command_name || !handler) {
-        return 0;
-    }
-
     LOG_INFO("Plugin requested to register command: %s", command_name);
-    return 1;  // Pretend it worked
+    return PLUGIN_OK;  // Pretend it worked for now
 }

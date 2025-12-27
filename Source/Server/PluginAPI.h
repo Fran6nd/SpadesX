@@ -75,12 +75,48 @@ typedef struct {
 } block_t;
 
 // ============================================================================
-// EVENT RETURN CODES
+// ERROR CODES
 // ============================================================================
 
-// Return codes for event handlers
-#define PLUGIN_ALLOW    1  // Allow the action to proceed
-#define PLUGIN_DENY     0  // Deny/cancel the action
+// Plugin API error codes
+// Functions that can fail return these codes
+// Negative values indicate errors, 0 or positive indicate success
+typedef enum {
+    // Success codes (positive values)
+    PLUGIN_OK = 0,                          // Operation successful
+    PLUGIN_ALLOW = 1,                       // Allow the action to proceed (for event handlers)
+    PLUGIN_DENY = 2,                        // Deny/cancel the action (for event handlers)
+
+    // General errors (-1 to -99)
+    PLUGIN_ERROR = -1,                      // Generic error
+    PLUGIN_ERROR_INVALID_PARAM = -2,        // Invalid parameter passed
+    PLUGIN_ERROR_NULL_POINTER = -3,         // NULL pointer where valid pointer required
+    PLUGIN_ERROR_OUT_OF_RANGE = -4,         // Value out of valid range
+    PLUGIN_ERROR_NOT_FOUND = -5,            // Requested entity not found
+    PLUGIN_ERROR_PERMISSION_DENIED = -6,    // Permission denied
+    PLUGIN_ERROR_INVALID_STATE = -7,        // Operation invalid in current state
+
+    // Player errors (-100 to -199)
+    PLUGIN_ERROR_PLAYER_NOT_FOUND = -100,   // Player ID not found
+    PLUGIN_ERROR_PLAYER_DEAD = -101,        // Player is dead
+    PLUGIN_ERROR_PLAYER_DISCONNECTED = -102,// Player disconnected
+    PLUGIN_ERROR_INVALID_TEAM = -103,       // Invalid team ID
+    PLUGIN_ERROR_INVALID_HP = -104,         // Invalid HP value (must be 0-100)
+
+    // Map errors (-200 to -299)
+    PLUGIN_ERROR_MAP_OUT_OF_BOUNDS = -200,  // Coordinates out of map bounds
+    PLUGIN_ERROR_MAP_INVALID_COLOR = -201,  // Invalid color value
+    PLUGIN_ERROR_MAP_NO_BLOCK = -202,       // No block at position
+
+    // Command errors (-300 to -399)
+    PLUGIN_ERROR_CMD_ALREADY_REGISTERED = -300, // Command already registered
+    PLUGIN_ERROR_CMD_INVALID_NAME = -301,   // Invalid command name
+    PLUGIN_ERROR_CMD_TOO_MANY = -302,       // Too many commands registered
+} plugin_result_t;
+
+// Get human-readable error message for a plugin result code
+// Returns NULL if code is not recognized
+const char* plugin_result_to_string(plugin_result_t result);
 
 // ============================================================================
 // PLUGIN API INTERFACE
@@ -115,31 +151,40 @@ typedef struct plugin_api {
     uint32_t (*player_get_color)(player_t* player);
 
     // Set player's color (local only - does not broadcast)
-    void (*player_set_color)(player_t* player, uint32_t color);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*player_set_color)(player_t* player, uint32_t color);
 
     // Set player's color and broadcast to all clients (including the player)
-    void (*player_set_color_broadcast)(server_t* server, player_t* player, uint32_t color);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*player_set_color_broadcast)(server_t* server, player_t* player, uint32_t color);
 
     // Restock player (50 blocks, 3 grenades)
-    void (*player_restock)(player_t* player);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*player_restock)(player_t* player);
 
     // Send a notice/message to a specific player
-    void (*player_send_notice)(player_t* player, const char* message);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*player_send_notice)(player_t* player, const char* message);
 
     // Kill a player
-    void (*player_kill)(player_t* player);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*player_kill)(player_t* player);
 
     // Set player HP (0-100)
-    void (*player_set_hp)(player_t* player, uint8_t hp);
+    // Returns: PLUGIN_OK on success, PLUGIN_ERROR_INVALID_HP if hp > 100
+    plugin_result_t (*player_set_hp)(player_t* player, uint8_t hp);
 
     // Get player HP
+    // Returns: HP value (0-100), or 0 if player is NULL
     uint8_t (*player_get_hp)(player_t* player);
 
     // Get player position
+    // Returns: Position vector, or (0,0,0) if player is NULL
     vector3f_t (*player_get_position)(player_t* player);
 
     // Set player position
-    void (*player_set_position)(player_t* player, vector3f_t position);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*player_set_position)(player_t* player, vector3f_t position);
 
     // ========================================================================
     // MAP FUNCTIONS
@@ -152,15 +197,19 @@ typedef struct plugin_api {
     uint32_t (*map_get_block)(map_t* map, int32_t x, int32_t y, int32_t z);
 
     // Set block at position and notify all players
-    void (*map_set_block)(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
+    // Returns: PLUGIN_OK on success, PLUGIN_ERROR_MAP_OUT_OF_BOUNDS if position invalid
+    plugin_result_t (*map_set_block)(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
 
     // Remove block at position and notify all players
-    void (*map_remove_block)(server_t* server, int32_t x, int32_t y, int32_t z);
+    // Returns: PLUGIN_OK on success, PLUGIN_ERROR_MAP_OUT_OF_BOUNDS if position invalid
+    plugin_result_t (*map_remove_block)(server_t* server, int32_t x, int32_t y, int32_t z);
 
     // Find the topmost solid block at (x, y)
+    // Returns: Z coordinate of top block, or -1 if no block found or position invalid
     int32_t (*map_find_top_block)(map_t* map, int32_t x, int32_t y);
 
     // Check if position is valid (within map bounds)
+    // Returns: 1 if valid, 0 if invalid
     int (*map_is_valid_pos)(map_t* map, int32_t x, int32_t y, int32_t z);
 
     // ========================================================================
@@ -168,21 +217,24 @@ typedef struct plugin_api {
     // ========================================================================
 
     // Add a colored block during initialization (no network updates)
-    void (*init_add_block)(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*init_add_block)(server_t* server, int32_t x, int32_t y, int32_t z, uint32_t color);
 
     // Set intel position (team_id: 0 or 1)
-    void (*init_set_intel_position)(server_t* server, uint8_t team_id, int32_t x, int32_t y, int32_t z);
+    // Returns: PLUGIN_OK on success, PLUGIN_ERROR_INVALID_TEAM if team_id >= 2
+    plugin_result_t (*init_set_intel_position)(server_t* server, uint8_t team_id, int32_t x, int32_t y, int32_t z);
 
     // ========================================================================
     // SERVER FUNCTIONS
     // ========================================================================
 
     // Broadcast a message to all players
-    void (*broadcast_message)(server_t* server, const char* message);
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*broadcast_message)(server_t* server, const char* message);
 
     // Register a custom command
-    // Returns 1 on success, 0 on failure
-    int (*register_command)(
+    // Returns: PLUGIN_OK on success, error code on failure
+    plugin_result_t (*register_command)(
         server_t* server,
         const char* command_name,
         const char* description,
