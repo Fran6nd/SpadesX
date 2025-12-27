@@ -114,8 +114,11 @@ typedef struct plugin_api {
     // Get player's current color
     uint32_t (*player_get_color)(player_t* player);
 
-    // Set player's color
+    // Set player's color (local only - does not broadcast)
     void (*player_set_color)(player_t* player, uint32_t color);
+
+    // Set player's color and broadcast to all clients (including the player)
+    void (*player_set_color_broadcast)(server_t* server, player_t* player, uint32_t color);
 
     // Restock player (50 blocks, 3 grenades)
     void (*player_restock)(player_t* player);
@@ -276,6 +279,15 @@ typedef int (*plugin_on_player_hit_fn)(
     uint8_t weapon
 );
 
+// Called when a player attempts to change their tool color
+// Plugin can modify new_color to force a different color
+// Return PLUGIN_ALLOW to allow, PLUGIN_DENY to prevent
+typedef int (*plugin_on_color_change_fn)(
+    server_t* server,
+    player_t* player,
+    uint32_t* new_color  // Can be modified by plugin
+);
+
 // ============================================================================
 // PLUGIN EXPORT MACROS
 // ============================================================================
@@ -315,6 +327,7 @@ typedef int (*plugin_on_player_hit_fn)(
 #define PLUGIN_ON_GRENADE_EXPLODE(func)   PLUGIN_EXPORT plugin_on_grenade_explode_fn spadesx_plugin_on_grenade_explode = func;
 #define PLUGIN_ON_TICK(func)              PLUGIN_EXPORT plugin_on_tick_fn spadesx_plugin_on_tick = func;
 #define PLUGIN_ON_PLAYER_HIT(func)        PLUGIN_EXPORT plugin_on_player_hit_fn spadesx_plugin_on_player_hit = func;
+#define PLUGIN_ON_COLOR_CHANGE(func)      PLUGIN_EXPORT plugin_on_color_change_fn spadesx_plugin_on_color_change = func;
 
 #ifdef __cplusplus
 }

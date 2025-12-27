@@ -119,10 +119,14 @@ PLUGIN_EXPORT int spadesx_plugin_on_block_place(server_t* server, player_t* play
     plugin_team_t team = api->player_get_team(server, player);
     uint32_t player_color = api->player_get_color(player);
 
-    // Force players to build in their team color
+    // Force block to be placed in team color
     if (block->color != team.color) {
-        api->player_set_color(player, team.color);
-        block->color = team.color;  // Modify the block color
+        block->color = team.color;
+    }
+
+    // Update the player's tool color if it's wrong and broadcast to all clients
+    if (player_color != team.color) {
+        api->player_set_color_broadcast(server, player, team.color);
     }
 
     // Auto restock when blocks are low
@@ -136,6 +140,7 @@ PLUGIN_EXPORT int spadesx_plugin_on_block_place(server_t* server, player_t* play
 // Command handler
 PLUGIN_EXPORT int spadesx_plugin_on_command(server_t* server, player_t* player, const char* command)
 {
+    (void) server;
     if (strcmp(command, "/restock") == 0) {
         api->player_restock(player);
         api->player_send_notice(player, "Restocked!");
@@ -148,6 +153,7 @@ PLUGIN_EXPORT int spadesx_plugin_on_command(server_t* server, player_t* player, 
 // Player connect
 PLUGIN_EXPORT void spadesx_plugin_on_player_connect(server_t* server, player_t* player)
 {
+    (void) server;
     const char* name = api->player_get_name(player);
     printf("[Example Plugin] Player %s connected\n", name);
 
@@ -160,6 +166,7 @@ PLUGIN_EXPORT void spadesx_plugin_on_player_connect(server_t* server, player_t* 
 // Player disconnect
 PLUGIN_EXPORT void spadesx_plugin_on_player_disconnect(server_t* server, player_t* player, const char* reason)
 {
+    (void) server;
     const char* name = api->player_get_name(player);
     printf("[Example Plugin] Player %s disconnected: %s\n", name, reason);
 }

@@ -32,7 +32,7 @@ block_action_build(server_t* server, player_t* player, uint8_t action_type, uint
         return;
     }
 
-    // Plugin may have modified the color
+    // Plugin may have modified the block color
     mapvxl_set_color(&server->s_map.map, X, Y, Z, block.color);
     player->blocks--;
     moveIntelAndTentUp(server);

@@ -31,6 +31,7 @@ typedef struct plugin {
     plugin_on_grenade_explode_fn on_grenade_explode;
     plugin_on_tick_fn           on_tick;
     plugin_on_player_hit_fn     on_player_hit;
+    plugin_on_color_change_fn   on_color_change;
 
     struct plugin* next;  // Linked list
 } plugin_t;
@@ -74,6 +75,7 @@ void plugin_dispatch_player_disconnect(server_t* server, player_t* player, const
 void plugin_dispatch_grenade_explode(server_t* server, player_t* player, vector3f_t position);
 void plugin_dispatch_tick(server_t* server);
 int plugin_dispatch_player_hit(server_t* server, player_t* shooter, player_t* victim, uint8_t hit_type, uint8_t weapon);
+int plugin_dispatch_color_change(server_t* server, player_t* player, uint32_t* new_color);
 
 #ifdef __cplusplus
 }

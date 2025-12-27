@@ -50,6 +50,7 @@ static uint8_t api_player_get_blocks(player_t* player);
 static uint8_t api_player_get_grenades(player_t* player);
 static uint32_t api_player_get_color(player_t* player);
 static void api_player_set_color(player_t* player, uint32_t color);
+static void api_player_set_color_broadcast(server_t* server, player_t* player, uint32_t color);
 static void api_player_restock(player_t* player);
 static void api_player_send_notice(player_t* player, const char* message);
 static void api_player_kill(player_t* player);
@@ -79,6 +80,7 @@ static plugin_api_t g_plugin_api = {
     .player_get_grenades = api_player_get_grenades,
     .player_get_color = api_player_get_color,
     .player_set_color = api_player_set_color,
+    .player_set_color_broadcast = api_player_set_color_broadcast,
     .player_restock = api_player_restock,
     .player_send_notice = api_player_send_notice,
     .player_kill = api_player_kill,
@@ -216,6 +218,7 @@ int plugin_load(server_t* server, const char* path)
     plugin->on_grenade_explode = (plugin_on_grenade_explode_fn)DLSYM(handle, "spadesx_plugin_on_grenade_explode");
     plugin->on_tick = (plugin_on_tick_fn)DLSYM(handle, "spadesx_plugin_on_tick");
     plugin->on_player_hit = (plugin_on_player_hit_fn)DLSYM(handle, "spadesx_plugin_on_player_hit");
+    plugin->on_color_change = (plugin_on_color_change_fn)DLSYM(handle, "spadesx_plugin_on_color_change");
     LOG_INFO("  Event handlers loaded");
 
     // Call plugin init
@@ -388,6 +391,18 @@ int plugin_dispatch_player_hit(server_t* server, player_t* shooter, player_t* vi
     return PLUGIN_ALLOW;
 }
 
+int plugin_dispatch_color_change(server_t* server, player_t* player, uint32_t* new_color)
+{
+    for (plugin_t* p = g_plugins; p != NULL; p = p->next) {
+        if (p->on_color_change) {
+            if (p->on_color_change(server, player, new_color) == PLUGIN_DENY) {
+                return PLUGIN_DENY;
+            }
+        }
+    }
+    return PLUGIN_ALLOW;
+}
+
 // ============================================================================
 // PLUGIN API IMPLEMENTATION
 // ============================================================================
@@ -440,6 +455,17 @@ static void api_player_set_color(player_t* player, uint32_t color)
 {
     if (player) {
         player->tool_color.raw = color;
+    }
+}
+
+static void api_player_set_color_broadcast(server_t* server, player_t* player, uint32_t color)
+{
+    if (server && player) {
+        player->tool_color.raw = color;
+        // Send to the player first
+        send_set_color_to_player(server, player, player, player->tool_color);
+        // Then broadcast to all other clients
+        send_set_color(server, player, player->tool_color);
     }
 }
 
