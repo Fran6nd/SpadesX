@@ -55,7 +55,8 @@ int main(void)
     TOMLH_GET_INT(server_table, capture_limit, "capture_limit", 10, 0);
 
     // Get map rotation mode
-    TOMLH_GET_STRING(server_table, rotation_mode_str, "map_rotation_mode", "random", 0);
+    const char* rotation_mode_default = "random";
+    TOMLH_GET_STRING(server_table, rotation_mode_str, "map_rotation_mode", rotation_mode_default, 0);
     if (rotation_mode_str != NULL) {
         if (strcmp(rotation_mode_str, "alphabetic") == 0) {
             rotation_mode = MAP_ROTATION_ALPHABETIC;
@@ -141,7 +142,9 @@ int main(void)
     free((char*) trusted_passwd);
     free((char*) team1_name);
     free((char*) team2_name);
-    free((char*) rotation_mode_str);
+    if (rotation_mode_str != rotation_mode_default) {
+        free((char*) rotation_mode_str);
+    }
     toml_free(parsed);
 
     return 0;
