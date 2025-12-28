@@ -17,13 +17,17 @@ typedef struct map_entry {
 } map_entry_t;
 
 static int
-file_exists(const char* directory, const char* filename, const char* extension)
+is_directory(const char* path)
 {
-    char filepath[512];
-    snprintf(filepath, sizeof(filepath), "%s/%s%s", directory, filename, extension);
-
     struct stat st;
-    return (stat(filepath, &st) == 0 && S_ISREG(st.st_mode));
+    return (stat(path, &st) == 0 && S_ISDIR(st.st_mode));
+}
+
+static int
+file_exists(const char* path)
+{
+    struct stat st;
+    return (stat(path, &st) == 0 && S_ISREG(st.st_mode));
 }
 
 static int
@@ -48,26 +52,46 @@ scan_maps_directory(const char* directory, uint8_t* map_count, int alphabetic)
 
     LOG_INFO("Scanning for maps in: %s", directory);
 
+    // Scan for map folders
     while ((entry = readdir(dir)) != NULL) {
         // Skip . and .. and hidden files
         if (entry->d_name[0] == '.') {
             continue;
         }
 
-        // Check if file ends with .vxl
-        size_t name_len = strlen(entry->d_name);
-        if (name_len < 5 || strcmp(entry->d_name + name_len - 4, ".vxl") != 0) {
+        // Build full path to potential map folder
+        char folder_path[512];
+        snprintf(folder_path, sizeof(folder_path), "%s/%s", directory, entry->d_name);
+
+        // Must be a directory
+        if (!is_directory(folder_path)) {
             continue;
         }
 
-        // Extract map name (without .vxl extension)
-        char map_name[256];
-        strncpy(map_name, entry->d_name, name_len - 4);
-        map_name[name_len - 4] = '\0';
+        // Folder name is the map name
+        const char* map_name = entry->d_name;
 
-        // Check if corresponding .toml exists
-        if (!file_exists(directory, map_name, ".toml")) {
-            LOG_WARNING("Map '%s' has .vxl file but missing .toml config - skipping", map_name);
+        // Check if folder contains <map_name>.vxl and <map_name>.toml
+        char vxl_path[512];
+        char toml_path[512];
+        snprintf(vxl_path, sizeof(vxl_path), "%s/%s.vxl", folder_path, map_name);
+        snprintf(toml_path, sizeof(toml_path), "%s/%s.toml", folder_path, map_name);
+
+        int has_vxl  = file_exists(vxl_path);
+        int has_toml = file_exists(toml_path);
+
+        if (!has_vxl && !has_toml) {
+            LOG_WARNING("Map folder '%s' does not contain %s.vxl or %s.toml - skipping", map_name, map_name, map_name);
+            continue;
+        }
+
+        if (!has_vxl) {
+            LOG_WARNING("Map folder '%s' missing %s.vxl - skipping", map_name, map_name);
+            continue;
+        }
+
+        if (!has_toml) {
+            LOG_WARNING("Map folder '%s' missing %s.toml config - skipping", map_name, map_name);
             continue;
         }
 
@@ -84,33 +108,9 @@ scan_maps_directory(const char* directory, uint8_t* map_count, int alphabetic)
 
     closedir(dir);
 
-    // Check for orphaned .toml files (config without map)
-    dir = opendir(directory);
-    if (dir) {
-        while ((entry = readdir(dir)) != NULL) {
-            if (entry->d_name[0] == '.') {
-                continue;
-            }
-
-            size_t name_len = strlen(entry->d_name);
-            if (name_len < 6 || strcmp(entry->d_name + name_len - 5, ".toml") != 0) {
-                continue;
-            }
-
-            // Extract map name (without .toml extension)
-            char map_name[256];
-            strncpy(map_name, entry->d_name, name_len - 5);
-            map_name[name_len - 5] = '\0';
-
-            if (!file_exists(directory, map_name, ".vxl")) {
-                LOG_WARNING("Map '%s' has .toml config but missing .vxl file - ignored", map_name);
-            }
-        }
-        closedir(dir);
-    }
-
     if (count == 0) {
         LOG_ERROR("No valid maps found in %s", directory);
+        LOG_ERROR("Each map must be in a folder matching the map name (e.g., MyMap/MyMap.vxl and MyMap/MyMap.toml)");
         *map_count = 0;
         return NULL;
     }

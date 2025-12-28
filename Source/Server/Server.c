@@ -134,11 +134,11 @@ static void _server_init(server_t*   server,
     server->map_name, fmin(strlen(server->s_map.current_map->string) + 1, 20), "%s", server->s_map.current_map->string);
     LOG_STATUS("Selecting %s as map", server->map_name);
 
-    snprintf(vxl_map, 128, "Resources/maps/%s.vxl", server->s_map.current_map->string);
+    snprintf(vxl_map, 128, "Resources/maps/%s/%s.vxl", server->s_map.current_map->string, server->s_map.current_map->string);
 
     LOG_STATUS("Loading spawn ranges from map file");
     char map_config_path[128];
-    snprintf(map_config_path, 128, "Resources/maps/%s.toml", server->s_map.current_map->string);
+    snprintf(map_config_path, 128, "Resources/maps/%s/%s.toml", server->s_map.current_map->string, server->s_map.current_map->string);
 
     int         team1_start[3];
     int         team2_start[3];

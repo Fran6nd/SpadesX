@@ -72,6 +72,25 @@ make -jX #(Replace X with number of threads you have on your system)
 ##### Windows
 You can use mingw, but you'll still have to install the libraries first.
 
+## Adding Maps
+
+Maps are automatically discovered from the `Resources/maps/` directory. Each map must follow this structure:
+
+```
+Resources/maps/
+└── MapName/
+    ├── MapName.vxl
+    └── MapName.toml
+```
+
+**Important:** The folder name, `.vxl` filename, and `.toml` filename must all match exactly.
+
+### Map Rotation
+
+You can configure map rotation in `Resources/config.toml`:
+- `map_rotation_mode = "random"` - Random map selection
+- `map_rotation_mode = "alphabetic"` - Sequential alphabetical rotation
+
 ## Contribute
 If you would like to contribute bug fixes, improvements, and new features please take a look at our [Contributor Guide](CONTRIBUTING.md) to see how you can participate in this open source project.
 

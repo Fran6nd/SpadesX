@@ -17,8 +17,13 @@ capture_limit = 10
 master = false
 
 # Map rotation
-# Maps are now auto-discovered from the Resources/maps/ directory
-# Rotation mode: "random" or "alphabetic"
+# Maps are auto-discovered from the Resources/maps/ directory
+# Each map must be in its own folder: Resources/maps/MapName/MapName.{vxl,toml}
+# The folder name, .vxl filename, and .toml filename must match exactly
+#
+# Rotation modes:
+#   "random"     - Randomly select a map on server start/restart
+#   "alphabetic" - Rotate through maps alphabetically in order
 map_rotation_mode = "random"
 
 # Messages to send upon joining
