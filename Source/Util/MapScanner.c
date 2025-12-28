@@ -72,8 +72,8 @@ scan_maps_directory(const char* directory, uint8_t* map_count, int alphabetic)
         const char* map_name = entry->d_name;
 
         // Check if folder contains <map_name>.vxl and <map_name>.toml
-        char vxl_path[512];
-        char toml_path[512];
+        char vxl_path[1024];
+        char toml_path[1024];
         snprintf(vxl_path, sizeof(vxl_path), "%s/%s.vxl", folder_path, map_name);
         snprintf(toml_path, sizeof(toml_path), "%s/%s.toml", folder_path, map_name);
 
