@@ -17,9 +17,9 @@ capture_limit = 10
 master = false
 
 # Map rotation
-maps = [
-    "Border_Hallway"
-]
+# Maps are now auto-discovered from the Resources/maps/ directory
+# Rotation mode: "random" or "alphabetic"
+map_rotation_mode = "random"
 
 # Messages to send upon joining
 welcome_messages = [

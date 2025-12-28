@@ -3,6 +3,7 @@
 #include <Server/Structs/ServerStruct.h>
 #include <Server/Structs/StartStruct.h>
 #include <Util/JSONHelpers.h>
+#include <Util/MapScanner.h>
 #include <Util/TOMLHelpers.h>
 #include <Util/Log.h>
 #include <Util/Types.h>
@@ -31,13 +32,15 @@ int main(void)
     color_t     team2_color;
     uint8_t     periodic_delays[5];
 
-    string_node_t* map_list              = NULL;
-    string_node_t* welcome_message_list  = NULL;
-    string_node_t* periodic_message_list = NULL;
+    string_node_t*      map_list              = NULL;
+    string_node_t*      welcome_message_list  = NULL;
+    string_node_t*      periodic_message_list = NULL;
+    const char*         rotation_mode_str     = NULL;
+    map_rotation_mode_t rotation_mode         = MAP_ROTATION_RANDOM;
 
-    size_t map_list_len;
-    size_t welcome_message_list_len;
-    size_t periodic_message_list_len;
+    uint8_t map_list_len;
+    size_t  welcome_message_list_len;
+    size_t  periodic_message_list_len;
 
     toml_table_t* parsed;
     toml_table_t* server_table;
@@ -51,15 +54,32 @@ int main(void)
     TOMLH_GET_INT(server_table, gamemode, "gamemode", 0, 0);
     TOMLH_GET_INT(server_table, capture_limit, "capture_limit", 10, 0);
 
-    TOMLH_GET_STRING_ARRAY_AS_DL(server_table, map_list, map_list_len, "maps", 1);
+    // Get map rotation mode
+    TOMLH_GET_STRING(server_table, rotation_mode_str, "map_rotation_mode", "random", 0);
+    if (rotation_mode_str != NULL) {
+        if (strcmp(rotation_mode_str, "alphabetic") == 0) {
+            rotation_mode = MAP_ROTATION_ALPHABETIC;
+            LOG_INFO("Map rotation mode: alphabetic");
+        } else if (strcmp(rotation_mode_str, "random") == 0) {
+            rotation_mode = MAP_ROTATION_RANDOM;
+            LOG_INFO("Map rotation mode: random");
+        } else {
+            LOG_WARNING("Unknown map_rotation_mode '%s', defaulting to random", rotation_mode_str);
+            rotation_mode = MAP_ROTATION_RANDOM;
+        }
+    }
+
+    // Auto-discover maps from Resources/maps/ directory
+    map_list = scan_maps_directory("Resources/maps", &map_list_len, rotation_mode == MAP_ROTATION_ALPHABETIC);
+
+    if (map_list_len == 0) {
+        LOG_ERROR("No valid maps found in Resources/maps/");
+        exit(EXIT_FAILURE);
+    }
+
     TOMLH_GET_INT_ARRAY(server_table, periodic_delays, "periodic_delays", 5, ((uint8_t[]){1, 5, 10, 30, 60}), 1);
     TOMLH_GET_STRING_ARRAY_AS_DL(server_table, welcome_message_list, welcome_message_list_len, "welcome_messages", 1);
     TOMLH_GET_STRING_ARRAY_AS_DL(server_table, periodic_message_list, periodic_message_list_len, "periodic_messages", 1);
-
-    if (map_list_len == 0) {
-        LOG_ERROR("At least one map must be specified");
-        exit(EXIT_FAILURE);
-    }
 
     /* [teams] */
     toml_table_t* teams_table;
@@ -108,7 +128,8 @@ int main(void)
                         .team1_color               = team1_color,
                         .team2_color               = team2_color,
                         .gamemode                  = gamemode,
-                        .capture_limit             = capture_limit};
+                        .capture_limit             = capture_limit,
+                        .map_rotation_mode         = rotation_mode};
 
     server_start(args);
 
@@ -120,6 +141,7 @@ int main(void)
     free((char*) trusted_passwd);
     free((char*) team1_name);
     free((char*) team2_name);
+    free((char*) rotation_mode_str);
     toml_free(parsed);
 
     return 0;

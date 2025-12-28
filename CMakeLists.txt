@@ -6,6 +6,12 @@ project(SpadesX LANGUAGES C)
 # Find pthread
 find_package(Threads REQUIRED)
 
+# Find json-c using pkg-config
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(JSON-C REQUIRED json-c)
+include_directories(${JSON-C_INCLUDE_DIRS})
+link_directories(${JSON-C_LIBRARY_DIRS})
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 option(CMAKE_UNITY_BUILD "Enable Unity Build" ON)
@@ -27,7 +33,7 @@ target_link_libraries(SpadesX
         tomlc99
         mapvxl
         m
-        json-c
+        ${JSON-C_LIBRARIES}
         readline
         Threads::Threads
 )
@@ -43,6 +49,12 @@ if (NOT EXISTS ${CMAKE_BINARY_DIR}/config.toml)
 configure_file(${PROJECT_SOURCE_DIR}/Resources/config.toml ${CMAKE_BINARY_DIR}/config.toml COPYONLY)
 endif()
 
+# Copy Resources directory structure to build directory
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/Resources)
+    file(COPY ${PROJECT_SOURCE_DIR}/Resources/ DESTINATION ${CMAKE_BINARY_DIR}/Resources)
+endif()
+
+# Legacy files - kept for backwards compatibility
 if (NOT EXISTS ${CMAKE_BINARY_DIR}/Border_Hallway.vxl)
 configure_file(${PROJECT_SOURCE_DIR}/Resources/Border_Hallway.vxl ${CMAKE_BINARY_DIR}/Border_Hallway.vxl COPYONLY)
 endif()

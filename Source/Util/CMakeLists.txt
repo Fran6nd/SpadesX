@@ -42,6 +42,7 @@ set(UTIL_HEADERS
     Physics.h
     Line.h
     Log.h
+    MapScanner.h
     Nanos.h
     Notice.h
     Weapon.h
@@ -56,6 +57,7 @@ set(UTIL_SOURCES
     Physics.c
     Line.c
     Log.c
+    MapScanner.c
     Nanos.c
     Notice.c
     Weapon.c
