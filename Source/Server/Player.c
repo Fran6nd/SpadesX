@@ -93,11 +93,11 @@ void update_movement_and_grenades(server_t* server)
             }
 
             // Apply water damage if enabled
-            if (server->protocol.water_damage_enabled && player->wade && player->alive) {
+            if (server->protocol.gamemode.water_damage_enabled && player->wade && player->alive) {
                 uint64_t time = get_nanos();
                 if (time - player->timers.since_last_water_damage >= NANO_IN_SECOND) {
                     vector3f_t zero = {0, 0, 0};
-                    send_set_hp(server, player, player, server->protocol.water_damage, 0, 4, 5, 0, zero);
+                    send_set_hp(server, player, player, server->protocol.gamemode.water_damage, 0, 4, 5, 0, zero);
                     player->timers.since_last_water_damage = time;
                 }
             }
