@@ -98,8 +98,9 @@ maps = ["MapName1", "MapName2", "MapName3"]
 ### Map Rotation
 
 You can configure map rotation mode in `Resources/config.toml`:
-- `map_rotation_mode = "random"` - Random map selection on server start/restart
+- `map_rotation_mode = "toml"` - Rotate through maps in the order defined in the `maps` array (default)
 - `map_rotation_mode = "alphabetic"` - Rotate through maps alphabetically in order
+- `map_rotation_mode = "random"` - Random map selection on server start/restart
 
 The rotation applies to the maps you've defined in the `maps` array.
 
