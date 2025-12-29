@@ -7,6 +7,13 @@
 #include <libmapvxl/libmapvxl.h>
 #include <stddef.h>
 
+typedef enum map_rotation_mode
+{
+    MAP_ROTATION_RANDOM = 0,
+    MAP_ROTATION_ALPHABETIC = 1,
+    MAP_ROTATION_TOML_DEFINED = 2
+} map_rotation_mode_t;
+
 typedef struct string_node
 {
     char*               string;
@@ -21,6 +28,7 @@ typedef struct map
     size_t         map_size;
     mapvxl_t       map;
     string_node_t* map_list;
+    map_rotation_mode_t rotation_mode;
 } map_t;
 
 typedef struct map_node

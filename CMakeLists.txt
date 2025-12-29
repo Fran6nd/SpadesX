@@ -43,10 +43,8 @@ if (NOT EXISTS ${CMAKE_BINARY_DIR}/config.toml)
 configure_file(${PROJECT_SOURCE_DIR}/Resources/config.toml ${CMAKE_BINARY_DIR}/config.toml COPYONLY)
 endif()
 
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/Border_Hallway.vxl)
-configure_file(${PROJECT_SOURCE_DIR}/Resources/Border_Hallway.vxl ${CMAKE_BINARY_DIR}/Border_Hallway.vxl COPYONLY)
-endif()
-
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/Border_Hallway.toml)
-configure_file(${PROJECT_SOURCE_DIR}/Resources/Border_Hallway.toml ${CMAKE_BINARY_DIR}/Border_Hallway.toml COPYONLY)
+# Copy Resources directory structure to build directory
+# This includes the maps folder structure (Resources/maps/MapName/MapName.{vxl,toml})
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/Resources)
+    file(COPY ${PROJECT_SOURCE_DIR}/Resources/ DESTINATION ${CMAKE_BINARY_DIR}/Resources)
 endif()
