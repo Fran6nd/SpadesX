@@ -13,6 +13,9 @@ typedef struct gamemode_vars
     vector3f_t   base[2];
     uint8_t      player_intel_team[2];
     uint8_t      intel_held[2];
+    // water damage
+    uint8_t      water_damage_enabled;
+    uint8_t      water_damage;
 } gamemode_vars_t;
 
 #endif

@@ -20,9 +20,6 @@ typedef struct protocol
     // respawn area
     quad3d_t spawns[2];
     uint32_t input_flags;
-    // water damage
-    uint8_t water_damage_enabled;
-    uint8_t water_damage;
 } protocol_t;
 
 #endif
