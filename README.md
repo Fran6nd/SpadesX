@@ -72,6 +72,38 @@ make -jX #(Replace X with number of threads you have on your system)
 ##### Windows
 You can use mingw, but you'll still have to install the libraries first.
 
+## Adding Maps
+
+Maps must be placed in the `Resources/maps/` directory. Each map must follow this structure:
+
+```
+Resources/maps/
+└── MapName/
+    ├── MapName.vxl
+    └── MapName.toml
+```
+
+**Important:** The folder name, `.vxl` filename, and `.toml` filename must all match exactly.
+
+### Configuring Maps
+
+To use maps on your server, add them to the `maps` array in `Resources/config.toml`:
+
+```toml
+[server]
+# List the maps you want to use
+maps = ["MapName1", "MapName2", "MapName3"]
+```
+
+### Map Rotation
+
+You can configure map rotation mode in `Resources/config.toml`:
+- `map_rotation_mode = "toml"` - Rotate through maps in the order defined in the `maps` array (default)
+- `map_rotation_mode = "alphabetic"` - Rotate through maps alphabetically in order
+- `map_rotation_mode = "random"` - Random map selection on server start/restart
+
+The rotation applies to the maps you've defined in the `maps` array.
+
 ## Contribute
 If you would like to contribute bug fixes, improvements, and new features please take a look at our [Contributor Guide](CONTRIBUTING.md) to see how you can participate in this open source project.
 

@@ -26,7 +26,7 @@ WORKDIR /usr/src/spadesx
 # readline relies on ncurses on alpine
 RUN     sed -i 's/readline/readline ncurses/' CMakeLists.txt; \
         mkdir build; \
-        cp Resources/* /app
+        cp -r Resources /app/
 
 WORKDIR /usr/src/spadesx/build
 

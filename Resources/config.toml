@@ -17,9 +17,18 @@ capture_limit = 10
 master = false
 
 # Map rotation
+# List the maps you want to use (must exist in Resources/maps/)
+# Each map must be in its own folder: Resources/maps/MapName/MapName.{vxl,toml}
+# The folder name, .vxl filename, and .toml filename must match exactly
 maps = [
     "Border_Hallway"
 ]
+
+# Rotation modes:
+#   "toml"       - Rotate through maps in the order defined above (default)
+#   "alphabetic" - Rotate through maps alphabetically in order
+#   "random"     - Randomly select a map on server start/restart
+map_rotation_mode = "toml"
 
 # Messages to send upon joining
 welcome_messages = [

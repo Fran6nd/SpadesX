@@ -101,13 +101,46 @@ static void _server_init(server_t*   server,
     if (reset == 0) {
         server->rand = seed_rand(time(NULL));
     }
-    index                     = gen_rand_long(&server->rand) % server->s_map.map_count;
-    server->s_map.current_map = server->s_map.map_list;
-    for (int i = 0; i <= index; ++i) {
-        if (server->s_map.current_map->next != NULL) {
-            server->s_map.current_map = server->s_map.current_map->next;
+
+    // Select map based on rotation mode
+    if (server->s_map.rotation_mode == MAP_ROTATION_RANDOM) {
+        // Random selection
+        index                     = gen_rand_long(&server->rand) % server->s_map.map_count;
+        server->s_map.current_map = server->s_map.map_list;
+        for (int i = 0; i < index; ++i) {
+            if (server->s_map.current_map->next != NULL) {
+                server->s_map.current_map = server->s_map.current_map->next;
+            } else {
+                break;
+            }
+        }
+    } else if (server->s_map.rotation_mode == MAP_ROTATION_ALPHABETIC) {
+        // Alphabetic (sequential) rotation
+        if (reset == 1 && server->s_map.current_map != NULL) {
+            // Move to next map in the list
+            if (server->s_map.current_map->next != NULL) {
+                server->s_map.current_map = server->s_map.current_map->next;
+            } else {
+                // Wrap around to first map
+                server->s_map.current_map = server->s_map.map_list;
+            }
         } else {
-            break; // Safety if we by some magical reason go beyond the list
+            // First load, start at beginning
+            server->s_map.current_map = server->s_map.map_list;
+        }
+    } else {
+        // TOML-defined (sequential rotation in order defined in config)
+        if (reset == 1 && server->s_map.current_map != NULL) {
+            // Move to next map in the list
+            if (server->s_map.current_map->next != NULL) {
+                server->s_map.current_map = server->s_map.current_map->next;
+            } else {
+                // Wrap around to first map
+                server->s_map.current_map = server->s_map.map_list;
+            }
+        } else {
+            // First load, start at beginning
+            server->s_map.current_map = server->s_map.map_list;
         }
     }
     snprintf(
@@ -407,6 +440,7 @@ void server_start(server_args args)
     server.running                = 1;
     server.s_map.map_list         = args.map_list;
     server.s_map.map_count        = args.map_count;
+    server.s_map.rotation_mode    = args.map_rotation_mode;
     server.welcome_messages       = args.welcome_message_list;
     server.welcome_messages_count = args.welcome_message_list_len;
     server.periodic_messages      = args.periodic_message_list;
