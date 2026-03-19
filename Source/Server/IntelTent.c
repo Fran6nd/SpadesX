@@ -41,6 +41,7 @@ uint8_t check_in_tent(server_t* server, uint8_t team)
 {
     uint8_t    ret      = 0;
     vector3f_t checkPos = server->protocol.gamemode.base[team];
+    if (checkPos.z <= 0) return 0;
     checkPos.z--;
     if (mapvxl_is_solid(&server->s_map.map, (int) checkPos.x, (int) checkPos.y, (int) checkPos.z))
     { // Implement check for solid blocks in XYZ range in libmapvxl
@@ -60,6 +61,7 @@ uint8_t check_in_intel(server_t* server, uint8_t team)
 {
     uint8_t    ret      = 0;
     vector3f_t checkPos = server->protocol.gamemode.intel[team];
+    if (checkPos.z <= 0) return 0;
     checkPos.z--;
     if (mapvxl_is_solid(&server->s_map.map, (int) checkPos.x, (int) checkPos.y, (int) checkPos.z)) {
         ret = 1;
