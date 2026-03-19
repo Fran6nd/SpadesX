@@ -1,10 +1,5 @@
 -- example_gamemode.lua — Babel-style gamemode (platform, team colors, trail)
 
-local TEAM_COLOR = {
-    [Team.A] = Color(0,   0,   255),
-    [Team.B] = Color(255, 0,   0),
-}
-
 local player_trail = {}
 
 on.map_load(function(map_name)
@@ -43,9 +38,8 @@ end)
 
 on.block_place(function(player_id, x, y, z, color)
     local team = player.get_team(player_id)
-    if not team then return end
-    local tc = TEAM_COLOR[team]
-    if not tc then return end
+    if team ~= Team.A and team ~= Team.B then return end
+    local tc = server.get_team_color(team)
     if player.get_blocks(player_id) < 10 then
         player.restock(player_id)
     end
@@ -58,9 +52,9 @@ end)
 
 on.color_change(function(player_id, color)
     local team = player.get_team(player_id)
-    if not team then return end
-    local tc = TEAM_COLOR[team]
-    if not tc then return end
+    if team ~= Team.A and team ~= Team.B then return end
+    local tc = server.get_team_color(team)
+    player.set_color_broadcast(player_id, tc)
     return tc
 end)
 
