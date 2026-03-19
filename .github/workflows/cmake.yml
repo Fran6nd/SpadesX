@@ -6,6 +6,7 @@ on:
 
 env:
   BUILD_TYPE: Release
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
@@ -17,10 +18,12 @@ jobs:
             name: Linux x86_64
           - os: ubuntu-24.04-arm
             name: Linux ARM64
-          - os: macos-13
-            name: macOS Intel
           - os: macos-latest
             name: macOS ARM
+            osx_arch: arm64
+          - os: macos-latest
+            name: macOS Intel
+            osx_arch: x86_64
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.name }}
@@ -40,11 +43,17 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install json-c readline
 
-      - name: Install readline
-        run: sudo apt install libreadline-dev
-
-      - name: Configure CMake
+      - name: Configure CMake (Linux)
+        if: runner.os == 'Linux'
         run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+
+      - name: Configure CMake (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -B ${{ github.workspace }}/build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="$(brew --prefix)" \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }}
 
       - name: Build
         run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
