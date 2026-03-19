@@ -19,6 +19,9 @@ add_subdirectory(Extern)
 add_compile_options(-Wall -Wextra -Werror -Wpedantic -Wno-error=unused-but-set-parameter -Wno-error=pedantic -std=gnu11 -fstack-protector-strong)
 add_executable(SpadesX "")
 
+find_library(JSON_C_LIBRARY NAMES json-c REQUIRED)
+find_library(READLINE_LIBRARY NAMES readline REQUIRED)
+
 target_link_libraries(SpadesX
     PRIVATE
         Server
@@ -27,8 +30,8 @@ target_link_libraries(SpadesX
         tomlc99
         mapvxl
         m
-        /opt/local/lib/libjson-c.dylib
-        /opt/local/lib/libreadline.dylib
+        ${JSON_C_LIBRARY}
+        ${READLINE_LIBRARY}
         Threads::Threads
         lua54
 )
