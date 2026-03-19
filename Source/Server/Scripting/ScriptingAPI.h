@@ -67,11 +67,13 @@ void scripting_on_server_shutdown(server_t* server);
 void scripting_on_tick(server_t* server);
 void scripting_on_player_connect(server_t* server, player_t* player);
 void scripting_on_player_disconnect(server_t* server, player_t* player, const char* reason);
-void scripting_on_grenade_explode(server_t* server, player_t* player, vector3f_t position);
 
 // Deny-type hooks — return SCRIPTING_DENY to cancel the action.
 // on_block_place may also have block->color modified by a script.
 // on_color_change may also have *new_color modified by a script.
+// on_grenade_explode: SCRIPTING_DENY suppresses damage and block destruction;
+//   the grenade object is consumed regardless.
+int scripting_on_grenade_explode(server_t* server, player_t* player, vector3f_t position);
 int scripting_on_block_place(server_t* server, player_t* player, block_t* block);
 int scripting_on_block_destroy(server_t* server, player_t* player, uint8_t tool, block_t* block);
 int scripting_on_player_hit(server_t* server, player_t* shooter, player_t* victim,

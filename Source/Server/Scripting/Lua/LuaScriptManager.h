@@ -34,7 +34,7 @@ void lua_hook_player_connect(server_t* server, player_t* player);
 void lua_hook_player_disconnect(server_t* server, player_t* player, const char* reason);
 void lua_hook_map_load(server_t* server, const char* map_name);
 void lua_hook_map_unload(server_t* server, const char* map_name);
-void lua_hook_grenade_explode(server_t* server, player_t* player, vector3f_t position);
+int  lua_hook_grenade_explode(server_t* server, player_t* player, vector3f_t position);
 int  lua_hook_block_place(server_t* server, player_t* player, block_t* block);
 int  lua_hook_block_destroy(server_t* server, player_t* player, uint8_t tool, block_t* block);
 int  lua_hook_player_hit(server_t* server, player_t* shooter, player_t* victim,

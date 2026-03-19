@@ -56,9 +56,9 @@ void scripting_on_player_disconnect(server_t* server, player_t* player, const ch
     lua_hook_player_disconnect(server, player, reason);
 }
 
-void scripting_on_grenade_explode(server_t* server, player_t* player, vector3f_t position)
+int scripting_on_grenade_explode(server_t* server, player_t* player, vector3f_t position)
 {
-    lua_hook_grenade_explode(server, player, position);
+    return lua_hook_grenade_explode(server, player, position);
 }
 
 int scripting_on_block_place(server_t* server, player_t* player, block_t* block)

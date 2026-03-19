@@ -469,26 +469,26 @@ static void dispatch_void_1i_1s(lua_State* L, const char* fn,
     }
 }
 
-static void dispatch_void_1i_3f(lua_State* L, const char* fn,
-                                  lua_Integer i,
-                                  lua_Number x, lua_Number y, lua_Number z)
+// Deny hook: (player_id, x, y, z) as int+floats — used for grenade_explode.
+// Returns 1 if the script returned false, 0 otherwise.
+static int dispatch_deny_1i_3f(lua_State* L, const char* fn,
+                                 lua_Integer pid,
+                                 lua_Number x, lua_Number y, lua_Number z)
 {
-    if (!L) {
-        return;
-    }
+    if (!L) return 0;
+    int base = lua_gettop(L);
     lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 1);
-        return;
-    }
-    lua_pushinteger(L, i);
-    lua_pushnumber(L, x);
-    lua_pushnumber(L, y);
-    lua_pushnumber(L, z);
-    if (lua_pcall(L, 4, 0, 0) != LUA_OK) {
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return 0; }
+    lua_pushinteger(L, pid);
+    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
+    if (lua_pcall(L, 4, 1, 0) != LUA_OK) {
         LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
+        lua_settop(L, base);
+        return 0;
     }
+    int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+    lua_settop(L, base);
+    return denied;
 }
 
 // Deny hook: (player_id, x, y, z) — used for block_destroy.
@@ -752,25 +752,31 @@ static void dispatch_hooks_void_1i_1s(lua_State* L, const char* event,
     lua_pop(L, 2);
 }
 
-static void dispatch_hooks_void_1i_3f(lua_State* L, const char* event,
-                                       lua_Integer a,
+// Returns 1 if any handler returned false (deny), 0 otherwise.
+static int dispatch_hooks_deny_1i_3f(lua_State* L, const char* event,
+                                       lua_Integer pid,
                                        lua_Number x, lua_Number y, lua_Number z)
 {
-    if (!L) return;
+    if (!L) return 0;
     lua_getglobal(L, "_registered_hooks");
     lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
     int n = (int)lua_rawlen(L, -1);
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
-        lua_pushinteger(L, a);
+        lua_pushinteger(L, pid);
         lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
-        if (lua_pcall(L, 4, 0, 0) != LUA_OK) {
+        if (lua_pcall(L, 4, 1, 0) == LUA_OK) {
+            int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+            lua_pop(L, 1);
+            if (denied) { lua_pop(L, 2); return 1; }
+        } else {
             LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
             lua_pop(L, 1);
         }
     }
     lua_pop(L, 2);
+    return 0;
 }
 
 // Returns 1 if any handler returned false (deny), 0 otherwise.
@@ -1065,13 +1071,18 @@ void lua_hook_map_unload(server_t* server, const char* map_name)
     dispatch_hooks_void_1s(g_map_lua, "on_map_unload", map_name);
 }
 
-void lua_hook_grenade_explode(server_t* server, player_t* player, vector3f_t pos)
+int lua_hook_grenade_explode(server_t* server, player_t* player, vector3f_t pos)
 {
     (void)server;
-    dispatch_void_1i_3f(g_server_lua, "on_grenade_explode",
-                        player->id, (lua_Number)pos.x, (lua_Number)pos.y, (lua_Number)pos.z);
-    dispatch_hooks_void_1i_3f(g_map_lua, "on_grenade_explode",
-                               player->id, (lua_Number)pos.x, (lua_Number)pos.y, (lua_Number)pos.z);
+    if (dispatch_deny_1i_3f(g_server_lua, "on_grenade_explode",
+                             player->id, (lua_Number)pos.x, (lua_Number)pos.y, (lua_Number)pos.z)) {
+        return SCRIPTING_DENY;
+    }
+    if (dispatch_hooks_deny_1i_3f(g_map_lua, "on_grenade_explode",
+                                   player->id, (lua_Number)pos.x, (lua_Number)pos.y, (lua_Number)pos.z)) {
+        return SCRIPTING_DENY;
+    }
+    return SCRIPTING_ALLOW;
 }
 
 int lua_hook_block_place(server_t* server, player_t* player, block_t* block)
