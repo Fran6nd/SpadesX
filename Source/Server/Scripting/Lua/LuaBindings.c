@@ -37,6 +37,25 @@
 // Helpers
 // ============================================================================
 
+// __newindex handler for read-only enum tables.
+static int l_enum_newindex(lua_State* L)
+{
+    (void)L;
+    return luaL_error(L, "attempt to modify a read-only enum");
+}
+
+// Apply a read-only metatable to the table on top of the stack.
+// The table stays on top after this call.
+static void lua_make_enum(lua_State* L)
+{
+    lua_newtable(L);
+    lua_pushcfunction(L, l_enum_newindex);
+    lua_setfield(L, -2, "__newindex");
+    lua_pushboolean(L, 0);
+    lua_setfield(L, -2, "__metatable");
+    lua_setmetatable(L, -2);
+}
+
 // Retrieve the server and look up a player by id.
 // Pushes nil and returns NULL if the player is not found.
 static player_t* get_player_arg(lua_State* L, int arg_idx)
@@ -902,21 +921,45 @@ void lua_bindings_register(lua_State* L)
     // to all subsequently loaded scripts and to the API functions themselves.
     lua_types_register(L);
 
+    // ---- Read-only enum tables ----
+
+    lua_newtable(L);
+    lua_pushinteger(L, TEAM_A);          lua_setfield(L, -2, "A");
+    lua_pushinteger(L, TEAM_B);          lua_setfield(L, -2, "B");
+    lua_pushinteger(L, TEAM_SPECTATOR);  lua_setfield(L, -2, "SPECTATOR");
+    lua_make_enum(L);
+    lua_setglobal(L, "Team");
+
+    lua_newtable(L);
+    lua_pushinteger(L, WEAPON_RIFLE);    lua_setfield(L, -2, "RIFLE");
+    lua_pushinteger(L, WEAPON_SMG);      lua_setfield(L, -2, "SMG");
+    lua_pushinteger(L, WEAPON_SHOTGUN);  lua_setfield(L, -2, "SHOTGUN");
+    lua_make_enum(L);
+    lua_setglobal(L, "Weapon");
+
+    lua_newtable(L);
+    lua_pushinteger(L, TOOL_SPADE);      lua_setfield(L, -2, "SPADE");
+    lua_pushinteger(L, TOOL_BLOCK);      lua_setfield(L, -2, "BLOCK");
+    lua_pushinteger(L, TOOL_GUN);        lua_setfield(L, -2, "GUN");
+    lua_pushinteger(L, TOOL_GRENADE);    lua_setfield(L, -2, "GRENADE");
+    lua_make_enum(L);
+    lua_setglobal(L, "Tool");
+
+    lua_newtable(L);
+    lua_pushinteger(L, HIT_TYPE_TORSO);  lua_setfield(L, -2, "TORSO");
+    lua_pushinteger(L, HIT_TYPE_HEAD);   lua_setfield(L, -2, "HEAD");
+    lua_pushinteger(L, HIT_TYPE_ARMS);   lua_setfield(L, -2, "ARMS");
+    lua_pushinteger(L, HIT_TYPE_LEGS);   lua_setfield(L, -2, "LEGS");
+    lua_pushinteger(L, HIT_TYPE_MELEE);  lua_setfield(L, -2, "MELEE");
+    lua_make_enum(L);
+    lua_setglobal(L, "HitType");
+
+    // ---- Modules ----
+
     luaL_newlib(L, player_lib);
     lua_setglobal(L, "player");
 
     luaL_newlib(L, bot_lib);
-    // Integer constants for convenience
-    lua_pushinteger(L, TEAM_A);          lua_setfield(L, -2, "TEAM_A");
-    lua_pushinteger(L, TEAM_B);          lua_setfield(L, -2, "TEAM_B");
-    lua_pushinteger(L, TEAM_SPECTATOR);  lua_setfield(L, -2, "TEAM_SPECTATOR");
-    lua_pushinteger(L, WEAPON_RIFLE);    lua_setfield(L, -2, "WEAPON_RIFLE");
-    lua_pushinteger(L, WEAPON_SMG);      lua_setfield(L, -2, "WEAPON_SMG");
-    lua_pushinteger(L, WEAPON_SHOTGUN);  lua_setfield(L, -2, "WEAPON_SHOTGUN");
-    lua_pushinteger(L, TOOL_SPADE);      lua_setfield(L, -2, "TOOL_SPADE");
-    lua_pushinteger(L, TOOL_BLOCK);      lua_setfield(L, -2, "TOOL_BLOCK");
-    lua_pushinteger(L, TOOL_GUN);        lua_setfield(L, -2, "TOOL_GUN");
-    lua_pushinteger(L, TOOL_GRENADE);    lua_setfield(L, -2, "TOOL_GRENADE");
     lua_setglobal(L, "bot");
 
     luaL_newlib(L, map_lib);
