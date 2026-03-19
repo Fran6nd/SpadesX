@@ -1,5 +1,8 @@
 -- babel.lua — Tower of Babel gamemode
 --
+-- Original gamemode by Yourself, modifications by izzy.
+-- Rewritten for SpadesX by the SpadesX contributors.
+--
 -- Teams build towers from their base toward the central platform where the
 -- enemy flag floats at sky level (z=0). First team to capture wins (cap=1).
 --
@@ -8,6 +11,8 @@
 --   - Players cannot destroy their own tower blocks with the spade.
 --   - Players cannot shoot/grenade blocks from their own side of the map.
 --   - Players cannot build while standing inside the enemy's tower zone.
+--   - Players spawn at a random point around their base.
+--   - Players cannot line-build while in or near their own tower zone.
 
 -- ============================================================================
 -- Configuration
@@ -182,4 +187,55 @@ end)
 
 on.intel_capture(function(player_id, team)
     server.broadcast(player.get_name(player_id) .. " captured the flag! Game over!")
+end)
+
+-- ============================================================================
+-- Spawn override — random position around team base
+-- ============================================================================
+
+on.player_spawn(function(player_id)
+    local team = player.get_team(player_id)
+    if team ~= Team.A and team ~= Team.B then return end
+
+    local base_x = (team == Team.A) and BLUE_BASE_X or GREEN_BASE_X
+    local x = math.max(0, math.min(511, base_x + math.random(-20, 20)))
+    local y = math.max(0, math.min(511, BASE_Y  + math.random(-20, 20)))
+    local z = map.find_top(x, y) or 63
+
+    return Vector3D(x + 0.5, y + 0.5, z - 2.4)
+end)
+
+-- ============================================================================
+-- Line-build rules — same zone restrictions as single-block builds
+-- ============================================================================
+
+on.block_line(function(player_id, start_pos, end_pos)
+    local team = player.get_team(player_id)
+    if team ~= Team.A and team ~= Team.B then return end
+
+    local pos = player.get_position(player_id)
+    if not pos then return end
+
+    local px = math.floor(pos.x)
+    local py = math.floor(pos.y)
+
+    -- Cannot line-build on or through the platform
+    if on_platform(start_pos.x, start_pos.y, start_pos.z) or
+       on_platform(end_pos.x,   end_pos.y,   end_pos.z)
+    then
+        player.send_notice(player_id, "You can't build on the central platform!")
+        return false
+    end
+
+    -- Blue cannot line-build while standing in enemy tower zone
+    if team == Team.A and in_zone(GREEN_TOWER, px, py) then
+        player.send_notice(player_id, "You can't build near the enemy's tower!")
+        return false
+    end
+
+    -- Green cannot line-build while standing in enemy tower zone
+    if team == Team.B and in_zone(BLUE_TOWER, px, py) then
+        player.send_notice(player_id, "You can't build near the enemy's tower!")
+        return false
+    end
 end)
