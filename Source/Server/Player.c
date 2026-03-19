@@ -155,7 +155,7 @@ void set_player_respawn_point(server_t* server, player_t* player)
         player->movement.position.y = spawn->from.y + dy * gen_rand(&server->rand) + 0.5F;
         player->movement.position.z = spawn->from.z + dz * gen_rand(&server->rand);
 
-        player->movement.forward_orientation.x = 0.f;
+        player->movement.forward_orientation.x = 1.f;
         player->movement.forward_orientation.y = 0.f;
         player->movement.forward_orientation.z = 0.f;
 
@@ -504,7 +504,7 @@ void on_new_player_connection(server_t* server, ENetEvent* event)
 // Initialize with ENET_PEER_STATE_CONNECTED so enet_peer_send accepts packets without warnings
 // Packets are never actually sent since the peer has no real connection
 static ENetPeer dummy_bot_peer = {
-    .state = ENET_PEER_STATE_CONNECTED,
+    .state = ENET_PEER_STATE_DISCONNECTED,
 };
 
 player_t* create_bot(server_t* server, const char* name)
