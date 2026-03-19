@@ -39,21 +39,47 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libjson-c-dev libreadline-dev
 
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
+      - name: Install dependencies (macOS ARM)
+        if: runner.os == 'macOS' && matrix.osx_arch == 'arm64'
         run: brew install json-c readline
+
+      - name: Build x86_64 dependencies (macOS Intel)
+        if: runner.os == 'macOS' && matrix.osx_arch == 'x86_64'
+        run: |
+          # json-c
+          git clone --depth=1 https://github.com/json-c/json-c.git /tmp/json-c
+          cmake -S /tmp/json-c -B /tmp/json-c-build \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64 \
+            -DCMAKE_INSTALL_PREFIX=/tmp/x86_64-deps
+          cmake --build /tmp/json-c-build --parallel
+          cmake --install /tmp/json-c-build
+
+          # readline
+          curl -fsSL https://ftp.gnu.org/gnu/readline/readline-8.2.tar.gz | tar xz -C /tmp
+          cd /tmp/readline-8.2
+          CFLAGS="-arch x86_64" ./configure --prefix=/tmp/x86_64-deps
+          make -j$(sysctl -n hw.ncpu)
+          make install
 
       - name: Configure CMake (Linux)
         if: runner.os == 'Linux'
         run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
 
-      - name: Configure CMake (macOS)
-        if: runner.os == 'macOS'
+      - name: Configure CMake (macOS ARM)
+        if: runner.os == 'macOS' && matrix.osx_arch == 'arm64'
         run: |
           cmake -B ${{ github.workspace }}/build \
             -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
             -DCMAKE_PREFIX_PATH="$(brew --prefix json-c);$(brew --prefix readline)" \
-            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }}
+            -DCMAKE_OSX_ARCHITECTURES=arm64
+
+      - name: Configure CMake (macOS Intel)
+        if: runner.os == 'macOS' && matrix.osx_arch == 'x86_64'
+        run: |
+          cmake -B ${{ github.workspace }}/build \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_PREFIX_PATH="/tmp/x86_64-deps" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64
 
       - name: Build
         run: cmake --build ${{ github.workspace }}/build --config ${{ env.BUILD_TYPE }}
