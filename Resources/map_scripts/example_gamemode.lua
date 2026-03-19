@@ -1,10 +1,8 @@
 -- example_gamemode.lua — Babel-style gamemode (platform, team colors, trail)
 
-local TOOL_SPADE = 0
-
 local TEAM_COLOR = {
-    [0] = Color(0,   0,   255),
-    [1] = Color(255, 0,   0),
+    [Team.A] = Color(0,   0,   255),
+    [Team.B] = Color(255, 0,   0),
 }
 
 local player_trail = {}
@@ -32,11 +30,11 @@ on.block_destroy(function(player_id, x, y, z)
         player.send_notice(player_id, "You should try to destroy the enemy's tower... Not the platform!")
         return false
     end
-    if player.get_tool(player_id) == TOOL_SPADE then
+    if player.get_tool(player_id) == Tool.SPADE then
         return true
     end
     local team = player.get_team(player_id)
-    if (team == 1 and x > 292) or (team == 0 and x < 220) then
+    if (team == Team.B and x > 292) or (team == Team.A and x < 220) then
         player.send_notice(player_id, "You should try to destroy the enemy's tower... It is not on this side of the map!")
         return false
     end
