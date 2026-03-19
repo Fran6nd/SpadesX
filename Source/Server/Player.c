@@ -279,8 +279,9 @@ void init_player(server_t*  server,
     player->kills               = 0;
     player->deaths              = 0;
     player->is_bot              = 0;
-    player->controller_L        = NULL;
-    player->lua_controller_ref  = LUA_NOREF;
+    player->controller_L               = NULL;
+    player->lua_controller_ref         = LUA_NOREF;
+    player->lua_controller_update_ref  = LUA_NOREF;
     memset(player->name, 0, PLAYER_NAME_STRLEN + 1);
     memset(player->os_info, 0, 255);
 }
@@ -576,11 +577,18 @@ void destroy_bot(server_t* server, player_t* bot)
 
     LOG_INFO("Destroying bot %s (#%hhu)", bot->name, bot->id);
 
-    // Release Lua controller reference if set
-    if (bot->controller_L && bot->lua_controller_ref != LUA_NOREF) {
-        luaL_unref((lua_State*)bot->controller_L, LUA_REGISTRYINDEX, bot->lua_controller_ref);
-        bot->controller_L       = NULL;
-        bot->lua_controller_ref = LUA_NOREF;
+    // Release Lua controller references if set
+    if (bot->controller_L) {
+        lua_State* L = (lua_State*)bot->controller_L;
+        if (bot->lua_controller_update_ref != LUA_NOREF) {
+            luaL_unref(L, LUA_REGISTRYINDEX, bot->lua_controller_update_ref);
+            bot->lua_controller_update_ref = LUA_NOREF;
+        }
+        if (bot->lua_controller_ref != LUA_NOREF) {
+            luaL_unref(L, LUA_REGISTRYINDEX, bot->lua_controller_ref);
+            bot->lua_controller_ref = LUA_NOREF;
+        }
+        bot->controller_L = NULL;
     }
 
     // Notify other players that bot disconnected

@@ -321,6 +321,10 @@ void lua_script_manager_map_unload(server_t* server, const char* map_name)
         player_t *p, *tmp;
         HASH_ITER(hh, g_server->players, p, tmp) {
             if (p->is_bot && p->controller_L == (void*)g_map_lua) {
+                if (p->lua_controller_update_ref != LUA_NOREF) {
+                    luaL_unref(g_map_lua, LUA_REGISTRYINDEX, p->lua_controller_update_ref);
+                    p->lua_controller_update_ref = LUA_NOREF;
+                }
                 luaL_unref(g_map_lua, LUA_REGISTRYINDEX, p->lua_controller_ref);
                 p->controller_L       = NULL;
                 p->lua_controller_ref = LUA_NOREF;
@@ -1004,41 +1008,40 @@ void lua_hook_tick(server_t* server)
     dispatch_void_0(g_server_lua, "on_tick");
     dispatch_hooks_void_0(g_map_lua, "on_tick");
 
-    // Dispatch bot controllers — call controller:update(id) or controller(id)
+    // Dispatch bot controllers.
+    //
+    // The update function and (for table controllers) the self reference are
+    // resolved once at set_controller time and stored as registry refs.
+    // This loop therefore does two rawgeti calls + pcall per bot with no
+    // per-tick string table lookups or type checks beyond what is strictly needed.
     player_t *p, *tmp;
     HASH_ITER(hh, server->players, p, tmp) {
-        if (!p->is_bot || p->state != STATE_READY) {
+        if (!p->is_bot || p->state != STATE_READY || !p->controller_L) {
             continue;
         }
-        if (!p->controller_L || p->lua_controller_ref == LUA_NOREF) {
+        if (p->lua_controller_ref == LUA_NOREF) {
             continue;
         }
         lua_State* L = (lua_State*)p->controller_L;
-        lua_rawgeti(L, LUA_REGISTRYINDEX, p->lua_controller_ref);
-        int t = lua_type(L, -1);
-        if (t == LUA_TFUNCTION) {
+        if (p->lua_controller_update_ref != LUA_NOREF) {
+            // Table controller: call update(self, id)
+            lua_rawgeti(L, LUA_REGISTRYINDEX, p->lua_controller_update_ref); // update fn
+            lua_rawgeti(L, LUA_REGISTRYINDEX, p->lua_controller_ref);        // self
+            lua_pushinteger(L, p->id);
+            if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+                LOG_ERROR("[Bot] controller:update error (id=%d): %s",
+                          p->id, lua_tostring(L, -1));
+                lua_pop(L, 1);
+            }
+        } else {
+            // Function controller: call fn(id)
+            lua_rawgeti(L, LUA_REGISTRYINDEX, p->lua_controller_ref);
             lua_pushinteger(L, p->id);
             if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
                 LOG_ERROR("[Bot] controller error (id=%d): %s",
                           p->id, lua_tostring(L, -1));
                 lua_pop(L, 1);
             }
-        } else if (t == LUA_TTABLE) {
-            lua_getfield(L, -1, "update");
-            if (lua_isfunction(L, -1)) {
-                lua_pushvalue(L, -2); // self = controller table
-                lua_pushinteger(L, p->id);
-                if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-                    LOG_ERROR("[Bot] controller:update error (id=%d): %s",
-                              p->id, lua_tostring(L, -1));
-                    lua_pop(L, 1);
-                }
-            } else {
-                lua_pop(L, 1); // pop non-function "update"
-            }
-            lua_pop(L, 1); // pop controller table
-        } else {
-            lua_pop(L, 1);
         }
     }
 }

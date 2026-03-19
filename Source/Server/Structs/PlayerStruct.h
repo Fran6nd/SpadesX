@@ -86,8 +86,9 @@ typedef struct player
     uint8_t                  is_bot;
     char                     name[PLAYER_NAME_STRLEN + 1];
     char                     os_info[255];
-    void*                    controller_L;       // lua_State* owning the controller ref (void* to avoid lua.h in this header)
-    int                      lua_controller_ref; // LUA_REGISTRYINDEX ref; LUA_NOREF (-2) if none
+    void*                    controller_L;              // lua_State* owning the controller ref (void* to avoid lua.h in this header)
+    int                      lua_controller_ref;        // LUA_REGISTRYINDEX ref to the controller (function or table); LUA_NOREF if none
+    int                      lua_controller_update_ref; // pre-resolved ref to the update function (table controllers only); LUA_NOREF otherwise
 } player_t;
 
 #endif

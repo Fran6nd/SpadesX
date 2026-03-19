@@ -2,7 +2,9 @@
 
 local bot_ids = {}
 
--- Controller: walk forward every tick
+-- Controller: walk forward and aim at the nearest enemy.
+-- bot.lookat_player(id, target_id) computes and sets the forward vector in one call.
+-- bot.lookat_point(id, x, y, z) is available for aiming at a world-space position.
 local WanderController = {}
 WanderController.__index = WanderController
 

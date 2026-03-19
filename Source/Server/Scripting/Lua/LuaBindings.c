@@ -29,6 +29,7 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
+#include <math.h>
 #include <string.h>
 
 // ============================================================================
@@ -355,25 +356,50 @@ static const luaL_Reg player_lib[] = {
 
 // Internal: store or clear the Lua controller reference on a bot.
 // arg_idx is the stack index of the controller (function, table, or nil).
+//
+// For function controllers  : lua_controller_ref = the function;
+//                             lua_controller_update_ref = LUA_NOREF.
+// For table controllers     : lua_controller_ref = the table (used as self);
+//                             lua_controller_update_ref = pre-resolved ref to table.update.
+//   Resolving update once here avoids a per-tick lua_getfield string lookup.
 static void lua_ref_controller(lua_State* L, player_t* bot, int arg_idx)
 {
-    // Release any existing reference
-    if (bot->controller_L && bot->lua_controller_ref != LUA_NOREF) {
-        luaL_unref((lua_State*)bot->controller_L, LUA_REGISTRYINDEX, bot->lua_controller_ref);
-        bot->controller_L       = NULL;
-        bot->lua_controller_ref = LUA_NOREF;
+    // Release any existing references
+    if (bot->controller_L) {
+        lua_State* old_L = (lua_State*)bot->controller_L;
+        if (bot->lua_controller_update_ref != LUA_NOREF) {
+            luaL_unref(old_L, LUA_REGISTRYINDEX, bot->lua_controller_update_ref);
+            bot->lua_controller_update_ref = LUA_NOREF;
+        }
+        if (bot->lua_controller_ref != LUA_NOREF) {
+            luaL_unref(old_L, LUA_REGISTRYINDEX, bot->lua_controller_ref);
+            bot->lua_controller_ref = LUA_NOREF;
+        }
+        bot->controller_L = NULL;
     }
     if (lua_isnoneornil(L, arg_idx)) {
         return; // clearing the controller
     }
     int t = lua_type(L, arg_idx);
-    if (t != LUA_TFUNCTION && t != LUA_TTABLE) {
-        luaL_argerror(L, arg_idx, "controller must be a function or table with :update(id)");
-        return;
+    if (t == LUA_TFUNCTION) {
+        lua_pushvalue(L, arg_idx);
+        bot->lua_controller_ref        = luaL_ref(L, LUA_REGISTRYINDEX);
+        bot->lua_controller_update_ref = LUA_NOREF; // dispatch uses lua_controller_ref directly
+        bot->controller_L              = (void*)L;
+    } else if (t == LUA_TTABLE) {
+        lua_getfield(L, arg_idx, "update");
+        if (!lua_isfunction(L, -1)) {
+            lua_pop(L, 1);
+            luaL_argerror(L, arg_idx, "table controller must have an 'update' function");
+            return;
+        }
+        bot->lua_controller_update_ref = luaL_ref(L, LUA_REGISTRYINDEX); // pop & store update fn
+        lua_pushvalue(L, arg_idx);
+        bot->lua_controller_ref = luaL_ref(L, LUA_REGISTRYINDEX);        // store table as self
+        bot->controller_L       = (void*)L;
+    } else {
+        luaL_argerror(L, arg_idx, "controller must be a function or table with update(self, id)");
     }
-    lua_pushvalue(L, arg_idx);
-    bot->lua_controller_ref = luaL_ref(L, LUA_REGISTRYINDEX);
-    bot->controller_L       = (void*)L;
 }
 
 // Helper: retrieve server + bot player; validates is_bot.
@@ -476,18 +502,62 @@ static int l_bot_move(lua_State* L)
     return 0;
 }
 
-// bot.look(id, fx, fy, fz) — set forward orientation
+// bot.look(id, fx, fy, fz) — set forward orientation vector directly (no network send;
+// the normal world-update loop broadcasts bot orientations to real players each tick).
 static int l_bot_look(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
-    if (!server || !bot) {
+    player_t* bot = get_bot_arg(L, 1);
+    if (!bot) {
         return 0;
     }
     bot->movement.forward_orientation.x = (float)luaL_checknumber(L, 2);
     bot->movement.forward_orientation.y = (float)luaL_checknumber(L, 3);
     bot->movement.forward_orientation.z = (float)luaL_checknumber(L, 4);
-    send_world_update(server, bot);
+    return 0;
+}
+
+// bot.lookat_point(id, x, y, z) — aim the bot toward a world-space point.
+// Computes and sets the normalized forward vector; no-op if already at that point.
+static int l_bot_lookat_point(lua_State* L)
+{
+    player_t* bot = get_bot_arg(L, 1);
+    if (!bot) {
+        return 0;
+    }
+    float tx = (float)luaL_checknumber(L, 2);
+    float ty = (float)luaL_checknumber(L, 3);
+    float tz = (float)luaL_checknumber(L, 4);
+    float dx  = tx - bot->movement.eye_pos.x;
+    float dy  = ty - bot->movement.eye_pos.y;
+    float dz  = tz - bot->movement.eye_pos.z;
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-4f) {
+        return 0;
+    }
+    bot->movement.forward_orientation.x = dx / len;
+    bot->movement.forward_orientation.y = dy / len;
+    bot->movement.forward_orientation.z = dz / len;
+    return 0;
+}
+
+// bot.lookat_player(id, target_id) — aim the bot toward another player's eye position.
+static int l_bot_lookat_player(lua_State* L)
+{
+    player_t* bot    = get_bot_arg(L, 1);
+    player_t* target = get_player_arg(L, 2);
+    if (!bot || !target || target->state != STATE_READY) {
+        return 0;
+    }
+    float dx  = target->movement.eye_pos.x - bot->movement.eye_pos.x;
+    float dy  = target->movement.eye_pos.y - bot->movement.eye_pos.y;
+    float dz  = target->movement.eye_pos.z - bot->movement.eye_pos.z;
+    float len = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (len < 1e-4f) {
+        return 0;
+    }
+    bot->movement.forward_orientation.x = dx / len;
+    bot->movement.forward_orientation.y = dy / len;
+    bot->movement.forward_orientation.z = dz / len;
     return 0;
 }
 
@@ -625,6 +695,8 @@ static const luaL_Reg bot_lib[] = {
     // actions
     {"move",                l_bot_move},
     {"look",                l_bot_look},
+    {"lookat_point",        l_bot_lookat_point},
+    {"lookat_player",       l_bot_lookat_player},
     {"jump",                l_bot_jump},
     {"crouch",              l_bot_crouch},
     {"sprint",              l_bot_sprint},
