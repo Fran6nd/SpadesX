@@ -289,18 +289,29 @@ void send_joining_data(server_t* server, player_t* player)
 {
     player_t *receiver, *tmp;
     LOG_INFO("Sending state to %s (#%hhu)", player->name, player->id);
+
+    // Step 1: ExistingPlayer for every player past the join screen.
+    // This is part of the join handshake and must arrive before state_data.
     HASH_ITER(hh, server->players, receiver, tmp)
     {
         if (receiver != player && is_past_join_screen(receiver)) {
             send_existing_player(server, player, receiver);
-            // If already spawned, also send CreatePlayer so the joining client
-            // renders them at their current position (not just knowing they exist).
-            if (receiver->state == STATE_READY) {
-                send_create_player(server, player, receiver);
-            }
         }
     }
+
+    // Step 2: StateData — client enters the game world after this packet.
     send_state_data(server, player);
+
+    // Step 3: CreatePlayer for every spawned player.
+    // Sent after state_data so the client has initialised its game world and
+    // will render the entities immediately. Sending before state_data caused
+    // the AoS client to silently discard the packets.
+    HASH_ITER(hh, server->players, receiver, tmp)
+    {
+        if (receiver != player && receiver->state == STATE_READY) {
+            send_create_player(server, player, receiver);
+        }
+    }
 }
 
 void on_player_update(server_t* server, player_t* player)
