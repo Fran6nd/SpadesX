@@ -108,3 +108,14 @@ void scripting_on_intel_capture(server_t* server, player_t* player, uint8_t team
 {
     lua_hook_intel_capture(server, player, team);
 }
+
+void scripting_on_player_spawn(server_t* server, player_t* player)
+{
+    lua_hook_player_spawn(server, player);
+}
+
+int scripting_on_block_line(server_t* server, player_t* player,
+                             vector3i_t start, vector3i_t end)
+{
+    return lua_hook_block_line(server, player, start, end);
+}

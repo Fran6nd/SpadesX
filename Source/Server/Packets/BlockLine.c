@@ -1,4 +1,5 @@
 #include <Server/IntelTent.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Server.h>
 #include <Util/Checks/PlayerChecks.h>
 #include <Util/Checks/PositionChecks.h>
@@ -112,6 +113,9 @@ void receive_block_line(server_t* server, player_t* player, stream_t* data)
         if (distance_in_3d(endF, player->movement.position) <= 4 && distance_in_3d(startF, player->locAtClick) <= 4 &&
             valid_pos_v3f(server, startF) && valid_pos_v3f(server, endF))
         {
+            if (scripting_on_block_line(server, player, start, end) == SCRIPTING_DENY) {
+                return;
+            }
             int size = line_get_blocks(&start, &end, server->s_map.result_line);
             player->blocks -= size;
             for (int i = 0; i < size; i++) {

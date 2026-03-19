@@ -1,5 +1,6 @@
 #include <lauxlib.h>
 #include <Server/Grenade.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/IntelTent.h>
 #include <Server/Master.h>
 #include <Server/Packets/Packets.h>
@@ -342,6 +343,7 @@ void on_player_update(server_t* server, player_t* player)
                 player->reloading      = 0;
             }
             set_player_respawn_point(server, player);
+            scripting_on_player_spawn(server, player);
             send_respawn(server, player);
             LOG_INFO("Player %s (#%hhu) spawning at: %f %f %f",
                      player->name,

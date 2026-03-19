@@ -93,6 +93,15 @@ void scripting_on_intel_drop(server_t* server, player_t* player, uint8_t team,
                               float x, float y, float z);
 void scripting_on_intel_capture(server_t* server, player_t* player, uint8_t team);
 
+// Spawn hook — called after default spawn point is set.
+// A script may override player->movement.position by returning a Vector3D.
+void scripting_on_player_spawn(server_t* server, player_t* player);
+
+// Block-line hook — deny-type.
+// Return SCRIPTING_DENY to cancel the entire line build.
+int scripting_on_block_line(server_t* server, player_t* player,
+                             vector3i_t start, vector3i_t end);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1049,6 +1049,121 @@ static void dispatch_hooks_void_2i_vec3(lua_State* L, const char* event,
     lua_pop(L, 2);
 }
 
+// Spawn hook: (player_id) → optional Vector3D to override spawn position.
+// Returns 1 and writes to *out_pos if the script returned a Vector3D, else 0.
+static int dispatch_spawn_1i(lua_State* L, const char* fn,
+                               lua_Integer pid, vector3f_t* out_pos)
+{
+    if (!L) return 0;
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return 0; }
+    lua_pushinteger(L, pid);
+    if (lua_pcall(L, 1, LUA_MULTRET, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int nret = lua_gettop(L) - base;
+    if (nret >= 1) {
+        lua_vec3_t* v = lua_test_vec3(L, base + 1);
+        if (v) {
+            out_pos->x = v->x;
+            out_pos->y = v->y;
+            out_pos->z = v->z;
+            lua_settop(L, base);
+            return 1;
+        }
+    }
+    lua_settop(L, base);
+    return 0;
+}
+
+static int dispatch_hooks_spawn_1i(lua_State* L, const char* event,
+                                     lua_Integer pid, vector3f_t* out_pos)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        int base = lua_gettop(L);
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, pid);
+        if (lua_pcall(L, 1, LUA_MULTRET, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+            continue;
+        }
+        int nret = lua_gettop(L) - base;
+        if (nret >= 1) {
+            lua_vec3_t* v = lua_test_vec3(L, base + 1);
+            if (v) {
+                out_pos->x = v->x;
+                out_pos->y = v->y;
+                out_pos->z = v->z;
+                lua_settop(L, base);
+                lua_pop(L, 2);
+                return 1;
+            }
+        }
+        lua_settop(L, base);
+    }
+    lua_pop(L, 2);
+    return 0;
+}
+
+// Block-line deny hook: (player_id, start_vec3, end_vec3).
+// Returns 1 if denied, 0 otherwise.
+static int dispatch_deny_block_line(lua_State* L, const char* fn,
+                                     lua_Integer pid,
+                                     vector3i_t start, vector3i_t end)
+{
+    if (!L) return 0;
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return 0; }
+    lua_pushinteger(L, pid);
+    lua_push_vec3(L, (float)start.x, (float)start.y, (float)start.z);
+    lua_push_vec3(L, (float)end.x,   (float)end.y,   (float)end.z);
+    if (lua_pcall(L, 3, 1, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+    lua_settop(L, base);
+    return denied;
+}
+
+static int dispatch_hooks_deny_block_line(lua_State* L, const char* event,
+                                           lua_Integer pid,
+                                           vector3i_t start, vector3i_t end)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, pid);
+        lua_push_vec3(L, (float)start.x, (float)start.y, (float)start.z);
+        lua_push_vec3(L, (float)end.x,   (float)end.y,   (float)end.z);
+        if (lua_pcall(L, 3, 1, 0) == LUA_OK) {
+            int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+            lua_pop(L, 1);
+            if (denied) { lua_pop(L, 2); return 1; }
+        } else {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+    return 0;
+}
+
 // ============================================================================
 // Hook dispatchers (public, called from ScriptingAPI.c)
 // ============================================================================
@@ -1249,4 +1364,30 @@ void lua_hook_intel_capture(server_t* server, player_t* player, uint8_t team)
     (void)server;
     dispatch_void_2i(g_server_lua, "on_intel_capture", player->id, team);
     dispatch_hooks_void_2i(g_map_lua, "on_intel_capture", player->id, team);
+}
+
+void lua_hook_player_spawn(server_t* server, player_t* player)
+{
+    (void)server;
+    vector3f_t new_pos = player->movement.position;
+    if (dispatch_spawn_1i(g_server_lua, "on_player_spawn", player->id, &new_pos)) {
+        player->movement.position = new_pos;
+        return;
+    }
+    if (dispatch_hooks_spawn_1i(g_map_lua, "on_player_spawn", player->id, &new_pos)) {
+        player->movement.position = new_pos;
+    }
+}
+
+int lua_hook_block_line(server_t* server, player_t* player,
+                         vector3i_t start, vector3i_t end)
+{
+    (void)server;
+    if (dispatch_deny_block_line(g_server_lua, "on_block_line", player->id, start, end)) {
+        return SCRIPTING_DENY;
+    }
+    if (dispatch_hooks_deny_block_line(g_map_lua, "on_block_line", player->id, start, end)) {
+        return SCRIPTING_DENY;
+    }
+    return SCRIPTING_ALLOW;
 }

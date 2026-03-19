@@ -47,6 +47,9 @@ void lua_hook_intel_take(server_t* server, player_t* player, uint8_t team);
 void lua_hook_intel_drop(server_t* server, player_t* player, uint8_t team,
                           float x, float y, float z);
 void lua_hook_intel_capture(server_t* server, player_t* player, uint8_t team);
+void lua_hook_player_spawn(server_t* server, player_t* player);
+int  lua_hook_block_line(server_t* server, player_t* player,
+                          vector3i_t start, vector3i_t end);
 
 // ============================================================================
 // Helpers used by LuaBindings.c
