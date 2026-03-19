@@ -1,4 +1,5 @@
 #include <Server/Packets/Packets.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Server.h>
 #include <Util/Checks/PlayerChecks.h>
 #include <Util/Enums.h>
@@ -47,6 +48,7 @@ void send_kill_action_packet(server_t* server,
     if (!makeInvisible && player->is_invisible == 0) {
         if (killer != player) {
             killer->kills++;
+            scripting_on_player_kill(server, killer, player, killReason);
         }
         player->deaths++;
         player->alive                        = 0;
