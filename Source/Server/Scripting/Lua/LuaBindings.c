@@ -967,6 +967,37 @@ static int l_server_is_intel_held(lua_State* L)
     return 1;
 }
 
+// server.set_base_position(team, x, y, z)
+// Moves the team's tent/base server-side and broadcasts the new position.
+static int l_server_set_base_position(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    lua_Number  x      = luaL_checknumber(L, 2);
+    lua_Number  y      = luaL_checknumber(L, 3);
+    lua_Number  z      = luaL_checknumber(L, 4);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        return 0;
+    }
+    vector3f_t pos = {(float)x, (float)y, (float)z};
+    server->protocol.gamemode.base[team] = pos;
+    // MoveObject: objects 2=TEAM_A tent, 3=TEAM_B tent
+    send_move_object(server, (uint8_t)(team + 2), (uint8_t)team, pos);
+    return 0;
+}
+
+// server.set_capture_limit(n) — set the score needed to win the round.
+static int l_server_set_capture_limit(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer limit  = luaL_checkinteger(L, 1);
+    if (!server || limit < 1 || limit > 255) {
+        return 0;
+    }
+    server->protocol.gamemode.score_limit = (uint8_t)limit;
+    return 0;
+}
+
 // server.get_gamemode() → integer (GameMode enum value)
 static int l_server_get_gamemode(lua_State* L)
 {
@@ -997,6 +1028,8 @@ static const luaL_Reg server_lib[] = {
     {"get_base_position",   l_server_get_base_position},
     {"get_intel_carrier",   l_server_get_intel_carrier},
     {"is_intel_held",       l_server_is_intel_held},
+    {"set_base_position",   l_server_set_base_position},
+    {"set_capture_limit",   l_server_set_capture_limit},
     {"get_gamemode",        l_server_get_gamemode},
     {"get_score",           l_server_get_score},
     {NULL, NULL}
