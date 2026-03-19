@@ -324,36 +324,6 @@ static int l_player_iterate(lua_State* L)
 }
 
 // player.create_bot(name, team, weapon) → id or nil
-static int l_player_create_bot(lua_State* L)
-{
-    server_t*   server = lua_mgr_get_server(L);
-    const char* name   = luaL_checkstring(L, 1);
-    lua_Integer team   = luaL_checkinteger(L, 2);
-    lua_Integer weapon = luaL_checkinteger(L, 3);
-    if (!server) {
-        lua_pushnil(L);
-        return 1;
-    }
-    player_t* bot = create_bot(server, name, (uint8_t)team, (uint8_t)weapon);
-    if (bot) {
-        lua_pushinteger(L, bot->id);
-    } else {
-        lua_pushnil(L);
-    }
-    return 1;
-}
-
-// player.destroy_bot(id)
-static int l_player_destroy_bot(lua_State* L)
-{
-    server_t* server = lua_mgr_get_server(L);
-    player_t* p      = get_player_arg(L, 1);
-    if (server && p && p->is_bot) {
-        destroy_bot(server, p);
-    }
-    return 0;
-}
-
 static const luaL_Reg player_lib[] = {
     {"count",               l_player_count},
     {"get_name",            l_player_get_name},
@@ -376,8 +346,6 @@ static const luaL_Reg player_lib[] = {
     {"get_grenades",        l_player_get_grenades},
     {"get_tool",            l_player_get_tool},
     {"iterate",             l_player_iterate},
-    {"create_bot",          l_player_create_bot},
-    {"destroy_bot",         l_player_destroy_bot},
     {NULL, NULL}
 };
 
