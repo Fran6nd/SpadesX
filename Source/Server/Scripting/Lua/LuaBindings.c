@@ -428,35 +428,24 @@ static int l_bot_destroy(lua_State* L)
     return 0;
 }
 
-// bot.spawn(id) — place bot at team spawn, set STATE_READY, notify clients
+// bot.spawn(id) — queue the bot for spawning via the normal state machine.
+// Requires bot.set_team() to have been called with a non-spectator team first.
+// The server processes STATE_SPAWNING on the next tick: sets position via
+// set_player_respawn_point, broadcasts create_player via send_respawn, then
+// transitions to STATE_READY. This is the same path real players take.
 static int l_bot_spawn(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
-    if (!server || !bot) {
+    player_t* bot = get_bot_arg(L, 1);
+    if (!bot) {
         return 0;
     }
-    if (bot->team == TEAM_SPECTATOR || bot->state == STATE_READY) {
-        return 0;
+    if (bot->team == TEAM_SPECTATOR) {
+        return 0;  // must have a team assigned before spawning
     }
-    set_player_respawn_point(server, bot);
-    bot->state     = STATE_READY;
-    bot->alive     = 1;
-    bot->hp        = 100;
-    bot->grenades  = 3;
-    bot->blocks    = 50;
-    bot->item      = TOOL_GUN;
-    bot->reloading = 0;
-    bot->primary_fire   = 0;
-    bot->secondary_fire = 0;
-    set_default_player_ammo(bot);
-
-    player_t *r, *tmp;
-    HASH_ITER(hh, server->players, r, tmp) {
-        if (r != bot && !r->is_bot && is_past_join_screen(r)) {
-            send_create_player(server, r, bot);
-        }
+    if (bot->state == STATE_READY || bot->state == STATE_SPAWNING) {
+        return 0;  // already spawned or in flight
     }
+    bot->state = STATE_SPAWNING;
     return 0;
 }
 
