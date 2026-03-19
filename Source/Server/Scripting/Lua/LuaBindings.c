@@ -884,10 +884,121 @@ static int l_server_register_command(lua_State* L)
     return 0;
 }
 
+// server.get_intel_position(team) → Vector3D | nil
+static int l_server_get_intel_position(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    vector3f_t p = server->protocol.gamemode.intel[team];
+    lua_push_vec3(L, p.x, p.y, p.z);
+    return 1;
+}
+
+// server.set_intel_position(team, x, y, z)
+// Moves the flag server-side and broadcasts the new position to all clients.
+static int l_server_set_intel_position(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    lua_Number  x      = luaL_checknumber(L, 2);
+    lua_Number  y      = luaL_checknumber(L, 3);
+    lua_Number  z      = luaL_checknumber(L, 4);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        return 0;
+    }
+    vector3f_t pos = {(float)x, (float)y, (float)z};
+    server->protocol.gamemode.intel[team] = pos;
+    send_move_object(server, (uint8_t)team, (uint8_t)team, pos);
+    return 0;
+}
+
+// server.get_base_position(team) → Vector3D | nil
+static int l_server_get_base_position(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    vector3f_t p = server->protocol.gamemode.base[team];
+    lua_push_vec3(L, p.x, p.y, p.z);
+    return 1;
+}
+
+// server.get_intel_carrier(team) → player_id | nil
+// Returns the id of the player currently carrying the given team's flag, or nil.
+static int l_server_get_intel_carrier(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    if (!server->protocol.gamemode.intel_held[team]) {
+        lua_pushnil(L);
+        return 1;
+    }
+    uint8_t carrier_team = (team == TEAM_A) ? TEAM_B : TEAM_A;
+    uint8_t carrier_id   = server->protocol.gamemode.player_intel_team[carrier_team];
+    if (carrier_id >= 32) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushinteger(L, carrier_id);
+    return 1;
+}
+
+// server.is_intel_held(team) → boolean
+static int l_server_is_intel_held(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        lua_pushboolean(L, 0);
+        return 1;
+    }
+    lua_pushboolean(L, server->protocol.gamemode.intel_held[team]);
+    return 1;
+}
+
+// server.get_gamemode() → integer (GameMode enum value)
+static int l_server_get_gamemode(lua_State* L)
+{
+    server_t* server = lua_mgr_get_server(L);
+    lua_pushinteger(L, server ? server->protocol.current_gamemode : 0);
+    return 1;
+}
+
+// server.get_score(team) → integer
+static int l_server_get_score(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        lua_pushinteger(L, 0);
+        return 1;
+    }
+    lua_pushinteger(L, server->protocol.gamemode.score[team]);
+    return 1;
+}
+
 static const luaL_Reg server_lib[] = {
-    {"broadcast",         l_server_broadcast},
-    {"register_command",  l_server_register_command},
-    {"get_team_color",    l_server_get_team_color},
+    {"broadcast",           l_server_broadcast},
+    {"register_command",    l_server_register_command},
+    {"get_team_color",      l_server_get_team_color},
+    {"get_intel_position",  l_server_get_intel_position},
+    {"set_intel_position",  l_server_set_intel_position},
+    {"get_base_position",   l_server_get_base_position},
+    {"get_intel_carrier",   l_server_get_intel_carrier},
+    {"is_intel_held",       l_server_is_intel_held},
+    {"get_gamemode",        l_server_get_gamemode},
+    {"get_score",           l_server_get_score},
     {NULL, NULL}
 };
 
@@ -969,6 +1080,14 @@ void lua_bindings_register(lua_State* L)
     lua_pushinteger(L, HIT_TYPE_MELEE);  lua_setfield(L, -2, "MELEE");
     lua_make_enum(L);
     lua_setglobal(L, "HitType");
+
+    lua_newtable(L);
+    lua_pushinteger(L, GAME_MODE_CTF);   lua_setfield(L, -2, "CTF");
+    lua_pushinteger(L, GAME_MODE_TC);    lua_setfield(L, -2, "TC");
+    lua_pushinteger(L, GAME_MODE_BABEL); lua_setfield(L, -2, "BABEL");
+    lua_pushinteger(L, GAME_MODE_ARENA); lua_setfield(L, -2, "ARENA");
+    lua_make_enum(L);
+    lua_setglobal(L, "GameMode");
 
     // ---- Modules ----
 
