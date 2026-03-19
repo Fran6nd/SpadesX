@@ -2,6 +2,7 @@
 
 #include <Server/Scripting/Lua/LuaScriptManager.h>
 #include <Server/Scripting/Lua/LuaBindings.h>
+#include <Server/Scripting/Lua/LuaTypes.h>
 #include <Server/Structs/ServerStruct.h>
 #include <Server/Structs/PlayerStruct.h>
 #include <Server/Structs/CommandStruct.h>
@@ -473,7 +474,7 @@ static void dispatch_void_1i_1s(lua_State* L, const char* fn,
     }
 }
 
-// Deny hook: (player_id, x, y, z) as int+floats — used for grenade_explode.
+// Deny hook: (player_id, Vector3D) — used for grenade_explode.
 // Returns 1 if the script returned false, 0 otherwise.
 static int dispatch_deny_1i_3f(lua_State* L, const char* fn,
                                  lua_Integer pid,
@@ -484,8 +485,8 @@ static int dispatch_deny_1i_3f(lua_State* L, const char* fn,
     lua_getglobal(L, fn);
     if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return 0; }
     lua_pushinteger(L, pid);
-    lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
-    if (lua_pcall(L, 4, 1, 0) != LUA_OK) {
+    lua_push_vec3(L, (float)x, (float)y, (float)z);
+    if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
         LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
         lua_settop(L, base);
         return 0;
@@ -552,8 +553,8 @@ static int dispatch_deny_4i_hit(lua_State* L, const char* fn,
     return denied;
 }
 
-// Block-place hook: (player_id, x, y, z, r, g, b)
-// Script can return false to deny, r,g,b to allow with new color, or nothing to allow.
+// Block-place hook: (player_id, x, y, z, Color)
+// Script can return false to deny, a Color to override the block color, or nothing to allow.
 // Returns 1 if denied, 0 if allowed (and possibly modifies block->color).
 static int dispatch_block_place(lua_State* L, const char* fn,
                                  lua_Integer pid, block_t* block)
@@ -567,46 +568,37 @@ static int dispatch_block_place(lua_State* L, const char* fn,
         lua_pop(L, 1);
         return 0;
     }
-    uint32_t c = block->color;
     lua_pushinteger(L, pid);
     lua_pushinteger(L, block->x);
     lua_pushinteger(L, block->y);
     lua_pushinteger(L, block->z);
-    lua_pushinteger(L, (c >> 16) & 0xFF); // r
-    lua_pushinteger(L, (c >>  8) & 0xFF); // g
-    lua_pushinteger(L, c         & 0xFF); // b
-    if (lua_pcall(L, 7, LUA_MULTRET, 0) != LUA_OK) {
+    lua_push_color_u32(L, block->color);
+    if (lua_pcall(L, 5, LUA_MULTRET, 0) != LUA_OK) {
         LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
         lua_settop(L, base);
         return 0;
     }
     int nret = lua_gettop(L) - base;
     if (nret == 0) {
-        return 0; // no return = allow
+        return 0; // no return = allow as-is
     }
-    if (nret == 1 && lua_isboolean(L, base + 1)) {
+    if (nret >= 1 && lua_isboolean(L, base + 1)) {
         int denied = !lua_toboolean(L, base + 1);
         lua_settop(L, base);
         return denied;
     }
-    if (nret >= 3 &&
-        lua_isinteger(L, base + 1) &&
-        lua_isinteger(L, base + 2) &&
-        lua_isinteger(L, base + 3))
-    {
-        int r = (int)lua_tointeger(L, base + 1);
-        int g = (int)lua_tointeger(L, base + 2);
-        int b = (int)lua_tointeger(L, base + 3);
+    lua_color_t* rc = lua_test_color(L, base + 1);
+    if (rc) {
+        block->color = ((uint32_t)rc->r << 16) | ((uint32_t)rc->g << 8) | rc->b;
         lua_settop(L, base);
-        block->color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
-        return 0; // allow with modified color
+        return 0; // allow with overridden color
     }
     lua_settop(L, base);
-    return 0; // unrecognised return — allow
+    return 0; // unrecognised return — allow as-is
 }
 
-// Color-change hook: (player_id, r, g, b)
-// Script can return false to deny, r,g,b to allow with new color, or nothing to allow.
+// Color-change hook: (player_id, Color)
+// Script can return false to deny, a Color to override, or nothing to allow.
 static int dispatch_color_change(lua_State* L, const char* fn,
                                    lua_Integer pid, uint32_t* new_color)
 {
@@ -619,12 +611,9 @@ static int dispatch_color_change(lua_State* L, const char* fn,
         lua_pop(L, 1);
         return 0;
     }
-    uint32_t c = *new_color;
     lua_pushinteger(L, pid);
-    lua_pushinteger(L, (c >> 16) & 0xFF); // r
-    lua_pushinteger(L, (c >>  8) & 0xFF); // g
-    lua_pushinteger(L, c         & 0xFF); // b
-    if (lua_pcall(L, 4, LUA_MULTRET, 0) != LUA_OK) {
+    lua_push_color_u32(L, *new_color);
+    if (lua_pcall(L, 2, LUA_MULTRET, 0) != LUA_OK) {
         LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
         lua_settop(L, base);
         return 0;
@@ -633,21 +622,15 @@ static int dispatch_color_change(lua_State* L, const char* fn,
     if (nret == 0) {
         return 0;
     }
-    if (nret == 1 && lua_isboolean(L, base + 1)) {
+    if (nret >= 1 && lua_isboolean(L, base + 1)) {
         int denied = !lua_toboolean(L, base + 1);
         lua_settop(L, base);
         return denied;
     }
-    if (nret >= 3 &&
-        lua_isinteger(L, base + 1) &&
-        lua_isinteger(L, base + 2) &&
-        lua_isinteger(L, base + 3))
-    {
-        int r = (int)lua_tointeger(L, base + 1);
-        int g = (int)lua_tointeger(L, base + 2);
-        int b = (int)lua_tointeger(L, base + 3);
+    lua_color_t* rc = lua_test_color(L, base + 1);
+    if (rc) {
+        *new_color = ((uint32_t)rc->r << 16) | ((uint32_t)rc->g << 8) | rc->b;
         lua_settop(L, base);
-        *new_color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
         return 0;
     }
     lua_settop(L, base);
@@ -769,8 +752,8 @@ static int dispatch_hooks_deny_1i_3f(lua_State* L, const char* event,
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         lua_pushinteger(L, pid);
-        lua_pushnumber(L, x); lua_pushnumber(L, y); lua_pushnumber(L, z);
-        if (lua_pcall(L, 4, 1, 0) == LUA_OK) {
+        lua_push_vec3(L, (float)x, (float)y, (float)z);
+        if (lua_pcall(L, 2, 1, 0) == LUA_OK) {
             int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
             lua_pop(L, 1);
             if (denied) { lua_pop(L, 2); return 1; }
@@ -847,10 +830,6 @@ static int dispatch_hooks_block_place(lua_State* L, const char* event,
     lua_getfield(L, -1, event);
     if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
     int n = (int)lua_rawlen(L, -1);
-    uint32_t c = block->color;
-    uint8_t br = (c >> 16) & 0xFF;
-    uint8_t bg = (c >>  8) & 0xFF;
-    uint8_t bb =  c        & 0xFF;
     for (int i = 1; i <= n; i++) {
         int base = lua_gettop(L);
         lua_rawgeti(L, -1, i);
@@ -858,43 +837,30 @@ static int dispatch_hooks_block_place(lua_State* L, const char* event,
         lua_pushinteger(L, block->x);
         lua_pushinteger(L, block->y);
         lua_pushinteger(L, block->z);
-        lua_pushinteger(L, br);
-        lua_pushinteger(L, bg);
-        lua_pushinteger(L, bb);
-        if (lua_pcall(L, 7, LUA_MULTRET, 0) != LUA_OK) {
+        lua_push_color_u32(L, block->color);
+        if (lua_pcall(L, 5, LUA_MULTRET, 0) != LUA_OK) {
             LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
             lua_pop(L, 1);
             continue;
         }
-        // base points just below the hooks-table entry we rawgeti'd,
-        // but after pcall the function and args are gone. The stack now has:
-        // [..., hooks, hooks[event], <nret return values>]
-        // base was set before rawgeti, so results start at base+1.
         int nret = lua_gettop(L) - base;
         if (nret == 0) {
-            // no return value — allow, continue to next handler
-            continue;
+            continue; // no return — allow, try next handler
         }
-        if (nret == 1 && lua_isboolean(L, base + 1)) {
+        if (nret >= 1 && lua_isboolean(L, base + 1)) {
             int denied = !lua_toboolean(L, base + 1);
             lua_settop(L, base);
             lua_pop(L, 2); // hooks[event] + hooks
             return denied;
         }
-        if (nret >= 3 &&
-            lua_isinteger(L, base + 1) &&
-            lua_isinteger(L, base + 2) &&
-            lua_isinteger(L, base + 3))
-        {
-            int r = (int)lua_tointeger(L, base + 1);
-            int g = (int)lua_tointeger(L, base + 2);
-            int b = (int)lua_tointeger(L, base + 3);
+        lua_color_t* rc = lua_test_color(L, base + 1);
+        if (rc) {
+            block->color = ((uint32_t)rc->r << 16) | ((uint32_t)rc->g << 8) | rc->b;
             lua_settop(L, base);
             lua_pop(L, 2); // hooks[event] + hooks
-            block->color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
-            return 0; // allow with modified color
+            return 0; // allow with overridden color
         }
-        // unrecognised return — allow, continue
+        // unrecognised return — allow, continue to next handler
         lua_settop(L, base);
     }
     lua_pop(L, 2); // hooks[event] + hooks
@@ -912,18 +878,12 @@ static int dispatch_hooks_color_change(lua_State* L, const char* event,
     lua_getfield(L, -1, event);
     if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
     int n = (int)lua_rawlen(L, -1);
-    uint32_t c = *new_color;
-    uint8_t cr = (c >> 16) & 0xFF;
-    uint8_t cg = (c >>  8) & 0xFF;
-    uint8_t cb =  c        & 0xFF;
     for (int i = 1; i <= n; i++) {
         int base = lua_gettop(L);
         lua_rawgeti(L, -1, i);
         lua_pushinteger(L, pid);
-        lua_pushinteger(L, cr);
-        lua_pushinteger(L, cg);
-        lua_pushinteger(L, cb);
-        if (lua_pcall(L, 4, LUA_MULTRET, 0) != LUA_OK) {
+        lua_push_color_u32(L, *new_color);
+        if (lua_pcall(L, 2, LUA_MULTRET, 0) != LUA_OK) {
             LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
             lua_pop(L, 1);
             continue;
@@ -932,24 +892,18 @@ static int dispatch_hooks_color_change(lua_State* L, const char* event,
         if (nret == 0) {
             continue;
         }
-        if (nret == 1 && lua_isboolean(L, base + 1)) {
+        if (nret >= 1 && lua_isboolean(L, base + 1)) {
             int denied = !lua_toboolean(L, base + 1);
             lua_settop(L, base);
             lua_pop(L, 2); // hooks[event] + hooks
             return denied;
         }
-        if (nret >= 3 &&
-            lua_isinteger(L, base + 1) &&
-            lua_isinteger(L, base + 2) &&
-            lua_isinteger(L, base + 3))
-        {
-            int r = (int)lua_tointeger(L, base + 1);
-            int g = (int)lua_tointeger(L, base + 2);
-            int b = (int)lua_tointeger(L, base + 3);
+        lua_color_t* rc = lua_test_color(L, base + 1);
+        if (rc) {
+            *new_color = ((uint32_t)rc->r << 16) | ((uint32_t)rc->g << 8) | rc->b;
             lua_settop(L, base);
             lua_pop(L, 2); // hooks[event] + hooks
-            *new_color = ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF);
-            return 0; // allow with modified color
+            return 0; // allow with overridden color
         }
         // unrecognised return — allow, continue
         lua_settop(L, base);
