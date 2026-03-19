@@ -297,7 +297,7 @@ static void* _world_update(void)
     HASH_ITER(hh, server.players, player, tmp)
     {
         on_player_update(&server, player);
-        if (is_past_join_screen(player) && !player->is_bot) {
+        if ((is_past_join_screen(player) || player->state == STATE_PICK_SCREEN) && !player->is_bot) {
             uint64_t time = get_nanos();
             if (time - player->timers.time_since_last_wu >= (uint64_t) (NANO_IN_SECOND / player->ups)) {
                 send_world_update(&server, player);

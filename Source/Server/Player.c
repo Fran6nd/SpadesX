@@ -302,17 +302,6 @@ void send_joining_data(server_t* server, player_t* player)
 
     // Step 2: StateData — client enters the game world after this packet.
     send_state_data(server, player);
-
-    // Step 3: CreatePlayer for every spawned player.
-    // Sent after state_data so the client has initialised its game world and
-    // will render the entities immediately. Sending before state_data caused
-    // the AoS client to silently discard the packets.
-    HASH_ITER(hh, server->players, receiver, tmp)
-    {
-        if (receiver != player && receiver->state == STATE_READY) {
-            send_create_player(server, player, receiver);
-        }
-    }
 }
 
 void on_player_update(server_t* server, player_t* player)
