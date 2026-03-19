@@ -20,6 +20,8 @@ jobs:
             name: Linux ARM64
           - os: macos-latest
             name: macOS ARM
+          - os: macos-15-intel
+            name: macOS Intel
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.name }}
