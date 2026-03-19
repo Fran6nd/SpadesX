@@ -20,7 +20,11 @@ add_compile_options(-Wall -Wextra -Werror -Wpedantic -Wno-error=unused-but-set-p
 add_executable(SpadesX "")
 
 find_library(JSON_C_LIBRARY NAMES json-c REQUIRED)
+find_path(JSON_C_INCLUDE_DIR NAMES json-c/json.h REQUIRED)
 find_library(READLINE_LIBRARY NAMES readline REQUIRED)
+find_path(READLINE_INCLUDE_DIR NAMES readline/readline.h REQUIRED)
+
+target_include_directories(SpadesX PRIVATE ${JSON_C_INCLUDE_DIR} ${READLINE_INCLUDE_DIR})
 
 target_link_libraries(SpadesX
     PRIVATE
