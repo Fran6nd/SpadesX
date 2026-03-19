@@ -854,6 +854,21 @@ static int l_server_broadcast(lua_State* L)
     return 0;
 }
 
+// server.get_team_color(team) → Color | nil
+// Returns the team color configured in config.toml for Team.A or Team.B.
+static int l_server_get_team_color(lua_State* L)
+{
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer team   = luaL_checkinteger(L, 1);
+    if (!server || (team != TEAM_A && team != TEAM_B)) {
+        lua_pushnil(L);
+        return 1;
+    }
+    color_t c = server->protocol.color_team[team];
+    lua_push_color_u32(L, c.raw);
+    return 1;
+}
+
 // server.register_command(name, description, handler [, permissions])
 static int l_server_register_command(lua_State* L)
 {
@@ -872,6 +887,7 @@ static int l_server_register_command(lua_State* L)
 static const luaL_Reg server_lib[] = {
     {"broadcast",         l_server_broadcast},
     {"register_command",  l_server_register_command},
+    {"get_team_color",    l_server_get_team_color},
     {NULL, NULL}
 };
 
