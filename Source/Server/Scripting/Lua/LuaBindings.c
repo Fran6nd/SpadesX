@@ -478,10 +478,11 @@ static int l_bot_move(lua_State* L)
     if (!server || !bot) {
         return 0;
     }
-    bot->move_forward   = lua_toboolean(L, 2) ? 1 : 0;
-    bot->move_backwards = lua_toboolean(L, 3) ? 1 : 0;
-    bot->move_left      = lua_toboolean(L, 4) ? 1 : 0;
-    bot->move_right     = lua_toboolean(L, 5) ? 1 : 0;
+    uint8_t prev_input   = bot->input;
+    bot->move_forward    = lua_toboolean(L, 2) ? 1 : 0;
+    bot->move_backwards  = lua_toboolean(L, 3) ? 1 : 0;
+    bot->move_left       = lua_toboolean(L, 4) ? 1 : 0;
+    bot->move_right      = lua_toboolean(L, 5) ? 1 : 0;
     // Repack into the raw input byte (bits 0-3: fwd/back/left/right)
     bot->input = (uint8_t)(
         (bot->move_forward   ? 1 : 0) |
@@ -493,7 +494,9 @@ static int l_bot_move(lua_State* L)
         (bot->sneaking       ? 64 : 0) |
         (bot->sprinting      ? 128 : 0)
     );
-    send_input_data(server, bot);
+    if (bot->input != prev_input) {
+        send_input_data(server, bot);
+    }
     return 0;
 }
 
@@ -577,13 +580,16 @@ static int l_bot_crouch(lua_State* L)
     if (!server || !bot) {
         return 0;
     }
+    uint8_t prev_input = bot->input;
     bot->crouching = lua_toboolean(L, 2) ? 1 : 0;
     if (bot->crouching) {
         bot->input |= 32;
     } else {
         bot->input &= (uint8_t)~32;
     }
-    send_input_data(server, bot);
+    if (bot->input != prev_input) {
+        send_input_data(server, bot);
+    }
     return 0;
 }
 
@@ -595,13 +601,16 @@ static int l_bot_sprint(lua_State* L)
     if (!server || !bot) {
         return 0;
     }
+    uint8_t prev_input = bot->input;
     bot->sprinting = lua_toboolean(L, 2) ? 1 : 0;
     if (bot->sprinting) {
         bot->input |= 128;
     } else {
         bot->input &= (uint8_t)~128;
     }
-    send_input_data(server, bot);
+    if (bot->input != prev_input) {
+        send_input_data(server, bot);
+    }
     return 0;
 }
 
@@ -613,10 +622,14 @@ static int l_bot_fire(lua_State* L)
     if (!server || !bot) {
         return 0;
     }
+    uint8_t prev_primary   = bot->primary_fire;
+    uint8_t prev_secondary = bot->secondary_fire;
     bot->primary_fire   = lua_toboolean(L, 2) ? 1 : 0;
     bot->secondary_fire = lua_toboolean(L, 3) ? 1 : 0;
-    uint8_t wi = (uint8_t)((bot->primary_fire ? 1 : 0) | (bot->secondary_fire ? 2 : 0));
-    send_weapon_input(server, bot, wi);
+    if (bot->primary_fire != prev_primary || bot->secondary_fire != prev_secondary) {
+        uint8_t wi = (uint8_t)((bot->primary_fire ? 1 : 0) | (bot->secondary_fire ? 2 : 0));
+        send_weapon_input(server, bot, wi);
+    }
     return 0;
 }
 

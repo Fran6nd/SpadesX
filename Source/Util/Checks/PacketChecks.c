@@ -8,7 +8,7 @@ uint8_t send_packet_except_sender(server_t* server, ENetPacket* packet, player_t
     player_t *player, *tmp;
     HASH_ITER(hh, server->players, player, tmp)
     {
-        if (sender->id != player->id && is_past_state_data(player) && !player->is_bot) {
+        if (sender->id != player->id && is_past_join_screen(player) && !player->is_bot) {
             if (enet_peer_send(player->peer, 0, packet) == 0) {
                 sent = 1;
             }
@@ -23,7 +23,7 @@ uint8_t send_packet_except_sender_dist_check(server_t* server, ENetPacket* packe
     player_t *player, *tmp;
     HASH_ITER(hh, server->players, player, tmp)
     {
-        if (sender->id != player->id && is_past_state_data(player) && !player->is_bot) {
+        if (sender->id != player->id && is_past_join_screen(player) && !player->is_bot) {
             if (player_to_player_visibile(sender, player) || player->team == TEAM_SPECTATOR) {
                 if (enet_peer_send(player->peer, 0, packet) == 0) {
                     sent = 1;
@@ -40,7 +40,7 @@ uint8_t send_packet_dist_check(server_t* server, ENetPacket* packet, player_t* p
     player_t *receiver, *tmp;
     HASH_ITER(hh, server->players, receiver, tmp)
     {
-        if (is_past_state_data(receiver) && !receiver->is_bot) {
+        if (is_past_join_screen(receiver) && !receiver->is_bot) {
             if (player_to_player_visibile(player, receiver) || receiver->team == TEAM_SPECTATOR) {
                 if (enet_peer_send(receiver->peer, 0, packet) == 0) {
                     sent = 1;
