@@ -436,6 +436,43 @@ static const luaL_Reg color_methods[] = {
 };
 
 // ============================================================================
+// Predefined color constants  (Color.RED, Color.WHITE, …)
+// ============================================================================
+
+typedef struct { const char* name; uint8_t r, g, b; } color_const_entry_t;
+
+static const color_const_entry_t color_const_table[] = {
+    { "RED",     255,   0,   0 },
+    { "GREEN",     0, 255,   0 },
+    { "BLUE",      0,   0, 255 },
+    { "WHITE",   255, 255, 255 },
+    { "BLACK",     0,   0,   0 },
+    { "YELLOW",  255, 255,   0 },
+    { "CYAN",      0, 255, 255 },
+    { "MAGENTA", 255,   0, 255 },
+    { "ORANGE",  255, 165,   0 },
+    { "PURPLE",  128,   0, 128 },
+    { NULL, 0, 0, 0 }
+};
+
+// __index on the Color constructor table — returns a fresh Color for named constants.
+// Returning a new instance each time prevents callers from mutating a shared value.
+static int color_const_index(lua_State* L)
+{
+    const char* k = lua_tostring(L, 2);
+    if (k) {
+        for (const color_const_entry_t* e = color_const_table; e->name; e++) {
+            if (strcmp(k, e->name) == 0) {
+                lua_push_color(L, e->r, e->g, e->b);
+                return 1;
+            }
+        }
+    }
+    lua_pushnil(L);
+    return 1;
+}
+
+// ============================================================================
 // Registration helpers
 // ============================================================================
 
@@ -503,4 +540,12 @@ void lua_types_register(lua_State* L)
         color_index, color_newindex, color_tostring,
         NULL, NULL, NULL, NULL, color_eq,
         color_new, color_call, "Color");
+
+    // Extend the Color constructor table so that Color.RED, Color.WHITE, etc.
+    // resolve to fresh Color instances via __index on its metatable.
+    lua_getglobal(L, "Color");
+    lua_getmetatable(L, -1);                  // metatable already has __call
+    lua_pushcfunction(L, color_const_index);
+    lua_setfield(L, -2, "__index");
+    lua_pop(L, 2);                            // pop metatable, Color table
 }
