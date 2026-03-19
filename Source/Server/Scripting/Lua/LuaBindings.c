@@ -105,11 +105,11 @@ static int l_bot_set_team(lua_State* L)
     }
     p->team = (uint8_t)team;
 
-    player_t *r, *tmp;
-    HASH_ITER(hh, server->players, r, tmp) {
-        if (r != p && !r->is_bot && is_past_join_screen(r)) {
-            send_existing_player(server, r, p);
-            if (p->state == STATE_READY) {
+    if (p->state == STATE_READY) {
+        player_t *r, *tmp;
+        HASH_ITER(hh, server->players, r, tmp) {
+            if (r != p && !r->is_bot && is_past_join_screen(r)) {
+                send_existing_player(server, r, p);
                 send_create_player(server, r, p);
             }
         }
@@ -133,11 +133,11 @@ static int l_bot_set_weapon(lua_State* L)
     p->weapon = (uint8_t)weapon;
     set_default_player_ammo(p);
 
-    player_t *r, *tmp;
-    HASH_ITER(hh, server->players, r, tmp) {
-        if (r != p && !r->is_bot && is_past_join_screen(r)) {
-            send_existing_player(server, r, p);
-            if (p->state == STATE_READY) {
+    if (p->state == STATE_READY) {
+        player_t *r, *tmp;
+        HASH_ITER(hh, server->players, r, tmp) {
+            if (r != p && !r->is_bot && is_past_join_screen(r)) {
+                send_existing_player(server, r, p);
                 send_create_player(server, r, p);
             }
         }
@@ -387,24 +387,20 @@ static player_t* get_bot_arg(lua_State* L, int arg_idx)
     return p;
 }
 
-// bot.create(name, team, weapon [, controller]) → id | nil
+// bot.create(name) → id | nil
+// Bot starts as spectator. Call bot.set_team(), bot.set_weapon(), then bot.spawn().
 static int l_bot_create(lua_State* L)
 {
     server_t*   server = lua_mgr_get_server(L);
     const char* name   = luaL_checkstring(L, 1);
-    lua_Integer team   = luaL_checkinteger(L, 2);
-    lua_Integer weapon = luaL_checkinteger(L, 3);
     if (!server) {
         lua_pushnil(L);
         return 1;
     }
-    player_t* bot = create_bot(server, name, (uint8_t)team, (uint8_t)weapon);
+    player_t* bot = create_bot(server, name);
     if (!bot) {
         lua_pushnil(L);
         return 1;
-    }
-    if (!lua_isnoneornil(L, 4)) {
-        lua_ref_controller(L, bot, 4);
     }
     lua_pushinteger(L, bot->id);
     return 1;

@@ -319,10 +319,6 @@ void on_player_update(server_t* server, player_t* player)
             send_joining_data(server, player);
             break;
         case STATE_PICK_SCREEN:
-            // Bots skip pick screen and go straight to spawning
-            if (player->is_bot && player->team != TEAM_SPECTATOR) {
-                player->state = STATE_SPAWNING;
-            }
             break;
         case STATE_SPAWNING:
             if (player->team != TEAM_SPECTATOR) {
@@ -500,7 +496,7 @@ static ENetPeer dummy_bot_peer = {
     .state = ENET_PEER_STATE_CONNECTED,
 };
 
-player_t* create_bot(server_t* server, const char* name, uint8_t team, uint8_t weapon)
+player_t* create_bot(server_t* server, const char* name)
 {
     if (!server || !name) {
         return NULL;
@@ -534,31 +530,24 @@ player_t* create_bot(server_t* server, const char* name, uint8_t team, uint8_t w
     vector3f_t strafe  = {0, 1, 0};
     init_player(server, bot, 0, 0, empty, forward, strafe, height);
 
-    // Set bot-specific fields
-    bot->id     = player_id;
-    bot->peer   = &dummy_bot_peer;  // Use dummy peer to prevent NULL pointer crashes
-    bot->is_bot = 1;
-    bot->hp     = 100;
-    bot->team   = team >= 2 ? TEAM_SPECTATOR : team;
-    bot->weapon = weapon > 2 ? WEAPON_RIFLE : weapon;
+    // Bot starts as spectator with no team assignment.
+    // Script must call bot.set_team(), bot.set_weapon(), then bot.spawn().
+    bot->id           = player_id;
+    bot->peer         = &dummy_bot_peer;
+    bot->is_bot       = 1;
+    bot->team         = TEAM_SPECTATOR;
+    bot->weapon       = WEAPON_RIFLE;
+    bot->welcome_sent = 1;
 
-    // Set default weapon stats based on weapon type
-    set_default_player_ammo(bot);
-
-    // Copy bot name
     strncpy(bot->name, name, PLAYER_NAME_STRLEN);
     bot->name[PLAYER_NAME_STRLEN] = '\0';
 
-    // Add to player hash table
     HASH_ADD(hh, server->players, id, sizeof(uint8_t), bot);
     HASH_SORT(server->players, player_sort);
 
-    LOG_INFO("Bot %s (#%hhu) created on team %hhu", bot->name, bot->id, bot->team);
+    LOG_INFO("Bot %s (#%hhu) created", bot->name, bot->id);
 
-    // Bots skip the network join flow and go straight to pick screen, then spawning
     bot->state = STATE_PICK_SCREEN;
-    bot->welcome_sent = 1;  // Bots don't need welcome messages
-
     return bot;
 }
 
