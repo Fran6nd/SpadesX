@@ -67,6 +67,8 @@ void scripting_on_server_shutdown(server_t* server);
 void scripting_on_tick(server_t* server);
 void scripting_on_player_connect(server_t* server, player_t* player);
 void scripting_on_player_disconnect(server_t* server, player_t* player, const char* reason);
+void scripting_on_player_kill(server_t* server, player_t* killer, player_t* victim,
+                              uint8_t kill_reason);
 
 // Deny-type hooks — return SCRIPTING_DENY to cancel the action.
 // on_block_place may also have block->color modified by a script.

@@ -32,6 +32,8 @@ void lua_hook_server_shutdown(server_t* server);
 void lua_hook_tick(server_t* server);
 void lua_hook_player_connect(server_t* server, player_t* player);
 void lua_hook_player_disconnect(server_t* server, player_t* player, const char* reason);
+void lua_hook_player_kill(server_t* server, player_t* killer, player_t* victim,
+                          uint8_t kill_reason);
 void lua_hook_map_load(server_t* server, const char* map_name);
 void lua_hook_map_unload(server_t* server, const char* map_name);
 int  lua_hook_grenade_explode(server_t* server, player_t* player, vector3f_t position);

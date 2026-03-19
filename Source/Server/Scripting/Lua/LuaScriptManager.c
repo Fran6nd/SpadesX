@@ -719,6 +719,42 @@ static void dispatch_hooks_void_1i(lua_State* L, const char* event, lua_Integer 
     lua_pop(L, 2);
 }
 
+static void dispatch_void_3i(lua_State* L, const char* fn,
+                              lua_Integer a, lua_Integer b, lua_Integer c)
+{
+    if (!L) return;
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return; }
+    lua_pushinteger(L, a);
+    lua_pushinteger(L, b);
+    lua_pushinteger(L, c);
+    if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+static void dispatch_hooks_void_3i(lua_State* L, const char* event,
+                                    lua_Integer a, lua_Integer b, lua_Integer c)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, a);
+        lua_pushinteger(L, b);
+        lua_pushinteger(L, c);
+        if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
 static void dispatch_hooks_void_1i_1s(lua_State* L, const char* event,
                                        lua_Integer a, const char* s)
 {
@@ -1012,6 +1048,16 @@ void lua_hook_player_disconnect(server_t* server, player_t* player, const char* 
     (void)server;
     dispatch_void_1i_1s(g_server_lua, "on_player_disconnect", player->id, reason);
     dispatch_hooks_void_1i_1s(g_map_lua, "on_player_disconnect", player->id, reason);
+}
+
+void lua_hook_player_kill(server_t* server, player_t* killer, player_t* victim,
+                          uint8_t kill_reason)
+{
+    (void)server;
+    dispatch_void_3i(g_server_lua, "on_player_kill",
+                     killer->id, victim->id, (lua_Integer)kill_reason);
+    dispatch_hooks_void_3i(g_map_lua, "on_player_kill",
+                           killer->id, victim->id, (lua_Integer)kill_reason);
 }
 
 void lua_hook_map_load(server_t* server, const char* map_name)
