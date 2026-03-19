@@ -975,6 +975,80 @@ static int dispatch_hooks_command(lua_State* L, const char* event,
     return 0;
 }
 
+// (player_id, team) — used for intel_take and intel_capture.
+static void dispatch_void_2i(lua_State* L, const char* fn,
+                              lua_Integer a, lua_Integer b)
+{
+    if (!L) return;
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return; }
+    lua_pushinteger(L, a);
+    lua_pushinteger(L, b);
+    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+static void dispatch_hooks_void_2i(lua_State* L, const char* event,
+                                    lua_Integer a, lua_Integer b)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, a);
+        lua_pushinteger(L, b);
+        if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
+// (player_id, team, Vector3D) — used for intel_drop.
+static void dispatch_void_2i_vec3(lua_State* L, const char* fn,
+                                   lua_Integer a, lua_Integer b,
+                                   float x, float y, float z)
+{
+    if (!L) return;
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return; }
+    lua_pushinteger(L, a);
+    lua_pushinteger(L, b);
+    lua_push_vec3(L, x, y, z);
+    if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+static void dispatch_hooks_void_2i_vec3(lua_State* L, const char* event,
+                                         lua_Integer a, lua_Integer b,
+                                         float x, float y, float z)
+{
+    if (!L) return;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
+    int n = (int)lua_rawlen(L, -1);
+    for (int i = 1; i <= n; i++) {
+        lua_rawgeti(L, -1, i);
+        lua_pushinteger(L, a);
+        lua_pushinteger(L, b);
+        lua_push_vec3(L, x, y, z);
+        if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
+            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        }
+    }
+    lua_pop(L, 2);
+}
+
 // ============================================================================
 // Hook dispatchers (public, called from ScriptingAPI.c)
 // ============================================================================
@@ -1153,4 +1227,26 @@ int lua_hook_command(server_t* server, player_t* player, const char* command)
         return SCRIPTING_CMD_HANDLED;
     }
     return SCRIPTING_CMD_PASS;
+}
+
+void lua_hook_intel_take(server_t* server, player_t* player, uint8_t team)
+{
+    (void)server;
+    dispatch_void_2i(g_server_lua, "on_intel_take", player->id, team);
+    dispatch_hooks_void_2i(g_map_lua, "on_intel_take", player->id, team);
+}
+
+void lua_hook_intel_drop(server_t* server, player_t* player, uint8_t team,
+                          float x, float y, float z)
+{
+    (void)server;
+    dispatch_void_2i_vec3(g_server_lua, "on_intel_drop", player->id, team, x, y, z);
+    dispatch_hooks_void_2i_vec3(g_map_lua, "on_intel_drop", player->id, team, x, y, z);
+}
+
+void lua_hook_intel_capture(server_t* server, player_t* player, uint8_t team)
+{
+    (void)server;
+    dispatch_void_2i(g_server_lua, "on_intel_capture", player->id, team);
+    dispatch_hooks_void_2i(g_map_lua, "on_intel_capture", player->id, team);
 }

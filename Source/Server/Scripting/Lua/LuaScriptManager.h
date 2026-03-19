@@ -43,6 +43,10 @@ int  lua_hook_player_hit(server_t* server, player_t* shooter, player_t* victim,
                          uint8_t hit_type, uint8_t weapon);
 int  lua_hook_color_change(server_t* server, player_t* player, uint32_t* new_color);
 int  lua_hook_command(server_t* server, player_t* player, const char* command);
+void lua_hook_intel_take(server_t* server, player_t* player, uint8_t team);
+void lua_hook_intel_drop(server_t* server, player_t* player, uint8_t team,
+                          float x, float y, float z);
+void lua_hook_intel_capture(server_t* server, player_t* player, uint8_t team);
 
 // ============================================================================
 // Helpers used by LuaBindings.c

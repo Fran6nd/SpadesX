@@ -85,6 +85,14 @@ int scripting_on_color_change(server_t* server, player_t* player, uint32_t* new_
 // Command hook — return SCRIPTING_CMD_HANDLED if a script consumed the command.
 int scripting_on_command(server_t* server, player_t* player, const char* command);
 
+// Intel (flag) hooks — informational, not deny-able.
+// team: the team whose intel was taken/dropped/captured (the enemy's team from
+// the acting player's perspective).
+void scripting_on_intel_take(server_t* server, player_t* player, uint8_t team);
+void scripting_on_intel_drop(server_t* server, player_t* player, uint8_t team,
+                              float x, float y, float z);
+void scripting_on_intel_capture(server_t* server, player_t* player, uint8_t team);
+
 #ifdef __cplusplus
 }
 #endif

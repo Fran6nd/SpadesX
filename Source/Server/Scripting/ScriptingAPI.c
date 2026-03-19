@@ -92,3 +92,19 @@ int scripting_on_command(server_t* server, player_t* player, const char* command
 {
     return lua_hook_command(server, player, command);
 }
+
+void scripting_on_intel_take(server_t* server, player_t* player, uint8_t team)
+{
+    lua_hook_intel_take(server, player, team);
+}
+
+void scripting_on_intel_drop(server_t* server, player_t* player, uint8_t team,
+                              float x, float y, float z)
+{
+    lua_hook_intel_drop(server, player, team, x, y, z);
+}
+
+void scripting_on_intel_capture(server_t* server, player_t* player, uint8_t team)
+{
+    lua_hook_intel_capture(server, player, team);
+}

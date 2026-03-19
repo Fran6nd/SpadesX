@@ -1,5 +1,6 @@
 #include <Server/Packets/Packets.h>
 #include <Server/ParseConvert.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Server.h>
 #include <Server/Structs/PlayerStruct.h>
 #include <Server/Structs/ServerStruct.h>
@@ -218,6 +219,7 @@ void handleTentAndIntel(server_t* server, player_t* player)
                     send_move_object(server, player->team, player->team, pos);
                     server->protocol.gamemode.intel[player->team] = pos;
                 }
+                scripting_on_intel_take(server, player, team);
             } else if (check_player_in_tent(server, player) &&
                        timeNow - player->timers.since_last_base_enter_restock >= 15)
             {
@@ -236,6 +238,7 @@ void handleTentAndIntel(server_t* server, player_t* player)
                     winning = 1;
                 }
                 send_intel_capture(server, player, winning);
+                scripting_on_intel_capture(server, player, team);
                 player->hp       = 100;
                 player->grenades = 3;
                 player->blocks   = 50;

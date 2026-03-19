@@ -1,4 +1,5 @@
 #include <Server/Packets/Packets.h>
+#include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Server.h>
 #include <Util/Checks/PlayerChecks.h>
 #include <Util/Log.h>
@@ -55,6 +56,10 @@ void send_intel_drop(server_t* server, player_t* player)
              (int) server->protocol.gamemode.intel[team].x,
              (int) server->protocol.gamemode.intel[team].y,
              (int) server->protocol.gamemode.intel[team].z);
+    scripting_on_intel_drop(server, player, team,
+                            server->protocol.gamemode.intel[team].x,
+                            server->protocol.gamemode.intel[team].y,
+                            server->protocol.gamemode.intel[team].z);
     uint8_t   sent = 0;
     player_t *connected_player, *tmp;
     HASH_ITER(hh, server->players, connected_player, tmp)
