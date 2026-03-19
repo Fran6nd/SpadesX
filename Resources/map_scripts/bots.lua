@@ -2,9 +2,11 @@
 
 local bot_ids = {}
 
--- Controller: walk forward and aim at the nearest enemy.
--- bot.lookat_player(id, target_id) computes and sets the forward vector in one call.
--- bot.lookat_point(id, x, y, z) is available for aiming at a world-space position.
+-- Controller: walk forward.
+-- Orientation API uses Vector3D:
+--   bot.look(id, Vector3D)           — set a direction vector directly
+--   bot.lookat_point(id, Vector3D)   — aim toward a world-space position
+--   bot.lookat_player(id, target_id) — aim toward another player's eye
 local WanderController = {}
 WanderController.__index = WanderController
 

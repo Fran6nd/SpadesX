@@ -3,17 +3,18 @@
 local TOOL_SPADE = 0
 
 local TEAM_COLOR = {
-    [0] = {r = 0,   g = 0,   b = 255},
-    [1] = {r = 255, g = 0,   b = 0},
+    [0] = Color(0,   0,   255),
+    [1] = Color(255, 0,   0),
 }
 
 local player_trail = {}
 
 on.map_load(function(map_name)
     log.info("Initializing " .. map_name .. " gamemode")
+    local platform_color = Color(0, 255, 255)
     for x = 206, 306 do
         for y = 240, 272 do
-            map.set_block(x, y, 1, 0, 255, 255)
+            map.set_block(x, y, 1, platform_color)
         end
     end
     log.info("Platform created")
@@ -42,7 +43,7 @@ on.block_destroy(function(player_id, x, y, z)
     return true
 end)
 
-on.block_place(function(player_id, x, y, z, r, g, b)
+on.block_place(function(player_id, x, y, z, color)
     local team = player.get_team(player_id)
     if not team then return end
     local tc = TEAM_COLOR[team]
@@ -50,19 +51,19 @@ on.block_place(function(player_id, x, y, z, r, g, b)
     if player.get_blocks(player_id) < 10 then
         player.restock(player_id)
     end
-    local pr, pg, pb = player.get_color(player_id)
-    if pr ~= tc.r or pg ~= tc.g or pb ~= tc.b then
-        player.set_color_broadcast(player_id, tc.r, tc.g, tc.b)
+    local pc = player.get_color(player_id)
+    if pc.r ~= tc.r or pc.g ~= tc.g or pc.b ~= tc.b then
+        player.set_color_broadcast(player_id, tc)
     end
-    return tc.r, tc.g, tc.b
+    return tc
 end)
 
-on.color_change(function(player_id, r, g, b)
+on.color_change(function(player_id, color)
     local team = player.get_team(player_id)
     if not team then return end
     local tc = TEAM_COLOR[team]
     if not tc then return end
-    return tc.r, tc.g, tc.b
+    return tc
 end)
 
 on.player_connect(function(player_id)
@@ -76,16 +77,17 @@ on.player_disconnect(function(player_id, reason)
 end)
 
 on.tick(function()
+    local trail_color = Color(255, 255, 0)
     for id, name in player.iterate() do
-        local x, y, z = player.get_position(id)
-        if x then
-            local bx = math.floor(x)
-            local by = math.floor(y)
-            local bz = math.floor(z) - 3
+        local pos = player.get_position(id)
+        if pos then
+            local bx = math.floor(pos.x)
+            local by = math.floor(pos.y)
+            local bz = math.floor(pos.z) - 3
             local trail = player_trail[id]
             local moved = not trail or trail.x ~= bx or trail.y ~= by or trail.z ~= bz
             if moved and map.is_valid(bx, by, bz) then
-                map.set_block(bx, by, bz, 255, 255, 0)
+                map.set_block(bx, by, bz, trail_color)
                 player_trail[id] = {x = bx, y = by, z = bz}
             end
         end
