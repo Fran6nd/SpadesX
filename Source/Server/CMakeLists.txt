@@ -110,6 +110,7 @@ set(SERVER_HEADERS
     Scripting/ScriptingAPI.h
     Scripting/Lua/LuaBindings.h
     Scripting/Lua/LuaScriptManager.h
+    Scripting/Lua/LuaTypes.h
 )
 
 set(SERVER_SOURCES
@@ -132,6 +133,7 @@ set(SERVER_SOURCES
     Scripting/ScriptingAPI.c
     Scripting/Lua/LuaBindings.c
     Scripting/Lua/LuaScriptManager.c
+    Scripting/Lua/LuaTypes.c
 )
 
 target_sources(Server
