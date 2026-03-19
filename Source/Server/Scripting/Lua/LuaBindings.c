@@ -8,6 +8,7 @@
 
 #include <Server/Scripting/Lua/LuaBindings.h>
 #include <Server/Scripting/Lua/LuaScriptManager.h>
+#include <Server/Scripting/Lua/LuaTypes.h>
 #include <Server/Scripting/ScriptingAPI.h>
 
 #include <Server/Structs/ServerStruct.h>
@@ -173,22 +174,23 @@ static int l_player_get_position(lua_State* L)
         lua_pushnil(L);
         return 1;
     }
-    lua_pushnumber(L, (lua_Number)p->movement.position.x);
-    lua_pushnumber(L, (lua_Number)p->movement.position.y);
-    lua_pushnumber(L, (lua_Number)p->movement.position.z);
-    return 3;
+    lua_push_vec3(L,
+        p->movement.position.x,
+        p->movement.position.y,
+        p->movement.position.z);
+    return 1;
 }
 
 static int l_player_set_position(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
-    lua_Number x = luaL_checknumber(L, 2);
-    lua_Number y = luaL_checknumber(L, 3);
-    lua_Number z = luaL_checknumber(L, 4);
-    if (p && x >= 0 && x < 512 && y >= 0 && y < 512 && z >= 0 && z < 64) {
-        p->movement.position.x = (float)x;
-        p->movement.position.y = (float)y;
-        p->movement.position.z = (float)z;
+    player_t*   p = get_player_arg(L, 1);
+    lua_vec3_t* v = lua_check_vec3(L, 2);
+    if (p && v->x >= 0 && v->x < 512 && v->y >= 0 && v->y < 512 &&
+        v->z >= 0 && v->z < 64)
+    {
+        p->movement.position.x = v->x;
+        p->movement.position.y = v->y;
+        p->movement.position.z = v->z;
     }
     return 0;
 }
@@ -200,39 +202,32 @@ static int l_player_get_color(lua_State* L)
         lua_pushnil(L);
         return 1;
     }
-    uint32_t c = p->tool_color.raw;
-    lua_pushinteger(L, (c >> 16) & 0xFF); // r
-    lua_pushinteger(L, (c >>  8) & 0xFF); // g
-    lua_pushinteger(L, c         & 0xFF); // b
-    return 3;
+    lua_push_color_u32(L, p->tool_color.raw);
+    return 1;
 }
 
 static int l_player_set_color(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
-    lua_Integer r = luaL_checkinteger(L, 2);
-    lua_Integer g = luaL_checkinteger(L, 3);
-    lua_Integer b = luaL_checkinteger(L, 4);
+    player_t*    p = get_player_arg(L, 1);
+    lua_color_t* c = lua_check_color(L, 2);
     if (p) {
-        p->tool_color.raw = ((uint32_t)(r & 0xFF) << 16) |
-                            ((uint32_t)(g & 0xFF) <<  8) |
-                             (uint32_t)(b & 0xFF);
+        p->tool_color.raw = ((uint32_t)c->r << 16) |
+                            ((uint32_t)c->g <<  8) |
+                             (uint32_t)c->b;
     }
     return 0;
 }
 
 static int l_player_set_color_broadcast(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* p      = get_player_arg(L, 1);
-    lua_Integer r    = luaL_checkinteger(L, 2);
-    lua_Integer g    = luaL_checkinteger(L, 3);
-    lua_Integer b    = luaL_checkinteger(L, 4);
+    server_t*    server = lua_mgr_get_server(L);
+    player_t*    p      = get_player_arg(L, 1);
+    lua_color_t* c      = lua_check_color(L, 2);
     if (server && p) {
         color_t color;
-        color.raw = ((uint32_t)(r & 0xFF) << 16) |
-                    ((uint32_t)(g & 0xFF) <<  8) |
-                     (uint32_t)(b & 0xFF);
+        color.raw = ((uint32_t)c->r << 16) |
+                    ((uint32_t)c->g <<  8) |
+                     (uint32_t)c->b;
         p->tool_color = color;
         send_set_color_to_player(server, p, p, color);
         send_set_color(server, p, color);
@@ -502,34 +497,33 @@ static int l_bot_move(lua_State* L)
     return 0;
 }
 
-// bot.look(id, fx, fy, fz) — set forward orientation vector directly (no network send;
+// bot.look(id, Vector3D) — set forward orientation vector directly (no network send;
 // the normal world-update loop broadcasts bot orientations to real players each tick).
 static int l_bot_look(lua_State* L)
 {
-    player_t* bot = get_bot_arg(L, 1);
+    player_t*   bot = get_bot_arg(L, 1);
+    lua_vec3_t* dir = lua_check_vec3(L, 2);
     if (!bot) {
         return 0;
     }
-    bot->movement.forward_orientation.x = (float)luaL_checknumber(L, 2);
-    bot->movement.forward_orientation.y = (float)luaL_checknumber(L, 3);
-    bot->movement.forward_orientation.z = (float)luaL_checknumber(L, 4);
+    bot->movement.forward_orientation.x = dir->x;
+    bot->movement.forward_orientation.y = dir->y;
+    bot->movement.forward_orientation.z = dir->z;
     return 0;
 }
 
-// bot.lookat_point(id, x, y, z) — aim the bot toward a world-space point.
+// bot.lookat_point(id, Vector3D) — aim the bot toward a world-space point.
 // Computes and sets the normalized forward vector; no-op if already at that point.
 static int l_bot_lookat_point(lua_State* L)
 {
-    player_t* bot = get_bot_arg(L, 1);
+    player_t*   bot    = get_bot_arg(L, 1);
+    lua_vec3_t* target = lua_check_vec3(L, 2);
     if (!bot) {
         return 0;
     }
-    float tx = (float)luaL_checknumber(L, 2);
-    float ty = (float)luaL_checknumber(L, 3);
-    float tz = (float)luaL_checknumber(L, 4);
-    float dx  = tx - bot->movement.eye_pos.x;
-    float dy  = ty - bot->movement.eye_pos.y;
-    float dz  = tz - bot->movement.eye_pos.z;
+    float dx  = target->x - bot->movement.eye_pos.x;
+    float dy  = target->y - bot->movement.eye_pos.y;
+    float dz  = target->z - bot->movement.eye_pos.z;
     float len = sqrtf(dx * dx + dy * dy + dz * dz);
     if (len < 1e-4f) {
         return 0;
@@ -732,10 +726,10 @@ static const luaL_Reg bot_lib[] = {
 
 static int l_map_get_block(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    lua_Integer x = luaL_checkinteger(L, 1);
-    lua_Integer y = luaL_checkinteger(L, 2);
-    lua_Integer z = luaL_checkinteger(L, 3);
+    server_t*   server = lua_mgr_get_server(L);
+    lua_Integer x      = luaL_checkinteger(L, 1);
+    lua_Integer y      = luaL_checkinteger(L, 2);
+    lua_Integer z      = luaL_checkinteger(L, 3);
     if (!server || x < 0 || x >= 512 || y < 0 || y >= 512 || z < 0 || z >= 64) {
         lua_pushnil(L);
         return 1;
@@ -744,28 +738,23 @@ static int l_map_get_block(lua_State* L)
         lua_pushnil(L);
         return 1;
     }
-    uint32_t c = mapvxl_get_color(&server->s_map.map, (int)x, (int)y, (int)z);
-    lua_pushinteger(L, (c >> 16) & 0xFF); // r
-    lua_pushinteger(L, (c >>  8) & 0xFF); // g
-    lua_pushinteger(L, c         & 0xFF); // b
-    return 3;
+    lua_push_color_u32(L, mapvxl_get_color(&server->s_map.map, (int)x, (int)y, (int)z));
+    return 1;
 }
 
 static int l_map_set_block(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    lua_Integer x = luaL_checkinteger(L, 1);
-    lua_Integer y = luaL_checkinteger(L, 2);
-    lua_Integer z = luaL_checkinteger(L, 3);
-    lua_Integer r = luaL_checkinteger(L, 4);
-    lua_Integer g = luaL_checkinteger(L, 5);
-    lua_Integer b = luaL_checkinteger(L, 6);
+    server_t*    server = lua_mgr_get_server(L);
+    lua_Integer  x      = luaL_checkinteger(L, 1);
+    lua_Integer  y      = luaL_checkinteger(L, 2);
+    lua_Integer  z      = luaL_checkinteger(L, 3);
+    lua_color_t* c      = lua_check_color(L, 4);
     if (!server || x < 0 || x >= 512 || y < 0 || y >= 512 || z < 0 || z >= 64) {
         return 0;
     }
-    uint32_t color = ((uint32_t)(r & 0xFF) << 16) |
-                     ((uint32_t)(g & 0xFF) <<  8) |
-                      (uint32_t)(b & 0xFF);
+    uint32_t color = ((uint32_t)c->r << 16) |
+                     ((uint32_t)c->g <<  8) |
+                      (uint32_t)c->b;
     mapvxl_set_color(&server->s_map.map, (int)x, (int)y, (int)z, color);
     return 0;
 }
@@ -896,6 +885,10 @@ static const luaL_Reg log_lib[] = {
 
 void lua_bindings_register(lua_State* L)
 {
+    // Register Vector2D, Vector3D, Color globals first so they are available
+    // to all subsequently loaded scripts and to the API functions themselves.
+    lua_types_register(L);
+
     luaL_newlib(L, player_lib);
     lua_setglobal(L, "player");
 
