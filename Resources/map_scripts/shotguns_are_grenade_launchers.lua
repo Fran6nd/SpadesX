@@ -23,8 +23,8 @@ on.player_hit(function(shooter_id, victim_id, hit_type, weapon)
 end)
 
 -- Pellet destroyed a block (client-reported BlockAction).
-on.block_destroy(function(player_id, x, y, z)
-    if player.get_weapon(player_id) ~= Weapon.SHOTGUN then return end
+on.block_destroy(function(player_id, x, y, z, reason)
+    if reason ~= BlockDestruction.SHOTGUN then return end
     if last_explode_tick[player_id] == tick_count then return end
     last_explode_tick[player_id] = tick_count
     server.explode(player_id, x + 0.5, y + 0.5, z + 0.5)

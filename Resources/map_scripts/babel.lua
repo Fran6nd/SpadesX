@@ -99,7 +99,7 @@ end)
 -- Block destruction rules
 -- ============================================================================
 
-on.block_destroy(function(player_id, x, y, z)
+on.block_destroy(function(player_id, x, y, z, reason)
     -- Platform is indestructible
     if on_platform(x, y, z) then
         return false
@@ -111,30 +111,34 @@ on.block_destroy(function(player_id, x, y, z)
     local pos  = player.get_position(player_id)
     if not pos then return end
 
-    local tool = player.get_tool(player_id)
-    local px   = math.floor(pos.x)
-    local py   = math.floor(pos.y)
+    local px = math.floor(pos.x)
+    local py = math.floor(pos.y)
+
+    local is_gun_or_grenade = reason == BlockDestruction.RIFLE
+                           or reason == BlockDestruction.SMG
+                           or reason == BlockDestruction.SHOTGUN
+                           or reason == BlockDestruction.GRENADE
 
     if team == Team.A then
         -- Cannot spade own tower blocks
-        if tool == Tool.SPADE and in_zone(BLUE_TOWER, px, py) then
+        if reason == BlockDestruction.SPADE and in_zone(BLUE_TOWER, px, py) then
             player.send_notice(player_id, "You can't destroy your team's blocks here. Attack the enemy's tower!")
             return false
         end
         -- Must cross midfield before shooting/grenading blocks
-        if px <= 288 and (tool == Tool.GUN or tool == Tool.GRENADE) then
+        if px <= 288 and is_gun_or_grenade then
             player.send_notice(player_id, "You must be closer to the enemy's base to shoot blocks!")
             return false
         end
 
     elseif team == Team.B then
         -- Cannot spade own tower blocks
-        if tool == Tool.SPADE and in_zone(GREEN_TOWER, px, py) then
+        if reason == BlockDestruction.SPADE and in_zone(GREEN_TOWER, px, py) then
             player.send_notice(player_id, "You can't destroy your team's blocks here. Attack the enemy's tower!")
             return false
         end
         -- Must cross midfield before shooting/grenading blocks
-        if px >= 224 and (tool == Tool.GUN or tool == Tool.GRENADE) then
+        if px >= 224 and is_gun_or_grenade then
             player.send_notice(player_id, "You must be closer to the enemy's base to shoot blocks!")
             return false
         end
