@@ -8,7 +8,7 @@ void cmd_pm(void* p_server, command_args_t arguments)
     server_t* server = (server_t*) p_server;
     char*     PM;
     uint8_t   ID = 33;
-    if (arguments.argc == 2 && parse_player(arguments.argv[1], &ID, &PM) && strlen(++PM) > 0) {
+    if (arguments.argc == 2 && parse_player(server, arguments.argv[1], &ID, &PM) && strlen(++PM) > 0) {
         player_t* player;
         HASH_FIND(hh, server->players, &ID, sizeof(ID), player);
         if (player == NULL) {

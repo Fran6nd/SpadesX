@@ -15,7 +15,7 @@ void cmd_clin(void* p_server, command_args_t arguments)
     } else if (arguments.argc != 2 && arguments.console) {
         send_server_notice(arguments.player, arguments.console, "No ID given");
         return;
-    } else if (arguments.argc == 2 && !parse_player(arguments.argv[1], &player_id, NULL)) {
+    } else if (arguments.argc == 2 && !parse_player(server, arguments.argv[1], &player_id, NULL)) {
         send_server_notice(arguments.player, arguments.console, "Invalid ID. Wrong format");
         return;
     }

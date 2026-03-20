@@ -43,7 +43,7 @@ void cmd_ban_custom(void* p_server, command_args_t arguments)
             } else {
                 cmd_generate_ban(server, arguments, time, ip, reason);
             }
-        } else if (parse_player(arguments.argv[1], &player_id, &reason)) {
+        } else if (parse_player(server, arguments.argv[1], &player_id, &reason)) {
             player_t* player;
             HASH_FIND(hh, server->players, &player_id, sizeof(player_id), player);
             if (player == NULL || player->state == STATE_DISCONNECTED) {

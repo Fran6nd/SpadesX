@@ -39,7 +39,7 @@ void cmd_kill(void* p_server, command_args_t arguments)
 
         uint8_t ID = 0;
         for (uint32_t i = 1; i < arguments.argc; i++) {
-            if (!parse_player(arguments.argv[i], &ID, NULL) || ID > server->protocol.max_players) {
+            if (!parse_player(server, arguments.argv[i], &ID, NULL) || ID > server->protocol.max_players) {
                 send_server_notice(arguments.player, arguments.console, "Invalid player \"%s\"!", arguments.argv[i]);
                 return;
             }

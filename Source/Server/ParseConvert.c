@@ -128,14 +128,43 @@ void team_id_to_str(server_t* server, char* dst, int team)
     snprintf(dst, 11, "%s", server->protocol.name_team[team]);
 }
 
-uint8_t parse_player(char* s, uint8_t* player_id, char** end)
+uint8_t parse_player(server_t* server, char* s, uint8_t* player_id, char** end)
 {
-    if (s[0] != '#' || strlen(s) < 2)
-    { // TODO: look up a player by their nickname if the argument doesn't start with #
-        return 0;
+    // Accept "#<id>" or bare "<id>" as a numeric player ID.
+    const char* digits = (s[0] == '#') ? s + 1 : s;
+    if (parse_byte((char*) digits, player_id, end)) {
+        // Adjust end to account for the '#' prefix we skipped.
+        if (s[0] == '#' && end && *end) {
+            // parse_byte set *end relative to digits; nothing to adjust further.
+        }
+        return 1;
     }
 
-    return parse_byte(s + 1, player_id, end);
+    // Fall back to name-based lookup (exact match first, then prefix).
+    if (!server) {
+        return 0;
+    }
+    player_t *p, *tmp_iter, *prefix_match = NULL;
+    size_t    s_len = strlen(s);
+    HASH_ITER(hh, server->players, p, tmp_iter) {
+        if (strcmp(p->name, s) == 0) {
+            *player_id = p->id;
+            if (end) *end = s + s_len;
+            return 1;
+        }
+        if (strncmp(p->name, s, s_len) == 0) {
+            if (prefix_match) {
+                return 0; // Ambiguous prefix — require more characters.
+            }
+            prefix_match = p;
+        }
+    }
+    if (prefix_match) {
+        *player_id = prefix_match->id;
+        if (end) *end = s + s_len;
+        return 1;
+    }
+    return 0;
 }
 
 uint8_t parse_byte(char* s, uint8_t* byte, char** end)

@@ -14,8 +14,8 @@ void cmd_tp(void* p_server, command_args_t arguments)
     }
     uint8_t to_be_teleported = 33;
     uint8_t to_teleport_to   = 33;
-    if (arguments.argc == 3 && parse_player(arguments.argv[1], &to_be_teleported, NULL) &&
-        parse_player(arguments.argv[2], &to_teleport_to, NULL))
+    if (arguments.argc == 3 && parse_player(server, arguments.argv[1], &to_be_teleported, NULL) &&
+        parse_player(server, arguments.argv[2], &to_teleport_to, NULL))
     {
         player_t *player_to_be_teleported, *player_to_teleport_to;
         HASH_FIND(hh, server->players, &to_teleport_to, sizeof(to_teleport_to), player_to_teleport_to);

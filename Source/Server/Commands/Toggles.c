@@ -15,7 +15,7 @@ void cmd_toggle_build(void* p_server, command_args_t arguments)
             server->global_ab = 1;
             broadcast_server_notice(server, arguments.console, "Building has been enabled");
         }
-    } else if (parse_player(arguments.argv[1], &ID, NULL)) {
+    } else if (parse_player(server, arguments.argv[1], &ID, NULL)) {
         player_t* player;
         HASH_FIND(hh, server->players, &ID, sizeof(ID), player);
         if (player == NULL) {
@@ -46,7 +46,7 @@ void cmd_toggle_kill(void* p_server, command_args_t arguments)
             server->global_ak = 1;
             broadcast_server_notice(server, arguments.console, "Killing has been enabled");
         }
-    } else if (parse_player(arguments.argv[1], &ID, NULL)) {
+    } else if (parse_player(server, arguments.argv[1], &ID, NULL)) {
         player_t* player;
         HASH_FIND(hh, server->players, &ID, sizeof(ID), player);
         if (player == NULL) {
@@ -69,7 +69,7 @@ void cmd_toggle_team_kill(void* p_server, command_args_t arguments)
 {
     server_t* server = (server_t*) p_server;
     uint8_t   ID     = 33;
-    if (arguments.argc == 2 && parse_player(arguments.argv[1], &ID, NULL)) {
+    if (arguments.argc == 2 && parse_player(server, arguments.argv[1], &ID, NULL)) {
         player_t* player;
         HASH_FIND(hh, server->players, &ID, sizeof(ID), player);
         if (player == NULL) {

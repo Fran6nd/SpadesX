@@ -8,7 +8,7 @@ void cmd_ratio(void* p_server, command_args_t arguments)
 {
     server_t* server = (server_t*) p_server;
     uint8_t   ID     = 33;
-    if (arguments.argc == 2 && parse_player(arguments.argv[1], &ID, NULL)) {
+    if (arguments.argc == 2 && parse_player(server, arguments.argv[1], &ID, NULL)) {
         player_t* player;
         HASH_FIND(hh, server->players, &ID, sizeof(ID), player);
         if (player == NULL) {
