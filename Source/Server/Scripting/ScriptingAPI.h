@@ -78,7 +78,7 @@ void scripting_on_player_kill(server_t* server, player_t* killer, player_t* vict
 //   the grenade object is consumed regardless.
 int scripting_on_grenade_explode(server_t* server, player_t* player, vector3f_t position);
 int scripting_on_block_place(server_t* server, player_t* player, block_t* block);
-int scripting_on_block_destroy(server_t* server, player_t* player, block_destruction_t reason, block_t* block);
+int scripting_on_block_destroy(server_t* server, player_t* player, tool_t tool, block_t* block);
 int scripting_on_player_hit(server_t* server, player_t* shooter, player_t* victim,
                             uint8_t hit_type, uint8_t weapon);
 int scripting_on_color_change(server_t* server, player_t* player, uint32_t* new_color);

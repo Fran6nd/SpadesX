@@ -17,7 +17,7 @@ on.map_unload(function(map_name)
     player_trail = {}
 end)
 
-on.block_destroy(function(player_id, x, y, z, reason)
+on.block_destroy(function(player_id, x, y, z, tool)
     local on_platform =
         (x >= 206 and x <= 306 and y >= 240 and y <= 272 and (z == 0 or z == 2)) or
         (x >= 205 and x <= 307 and y >= 239 and y <= 273 and z == 1)
@@ -25,7 +25,7 @@ on.block_destroy(function(player_id, x, y, z, reason)
         player.send_notice(player_id, "You should try to destroy the enemy's tower... Not the platform!")
         return false
     end
-    if reason == BlockDestruction.SPADE then
+    if tool == Tool.SPADE then
         return true
     end
     local team = player.get_team(player_id)

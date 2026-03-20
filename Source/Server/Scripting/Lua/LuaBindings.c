@@ -1137,15 +1137,6 @@ void lua_bindings_register(lua_State* L)
     lua_setglobal(L, "HitType");
 
     lua_newtable(L);
-    lua_pushinteger(L, BLOCK_DESTRUCTION_SPADE);   lua_setfield(L, -2, "SPADE");
-    lua_pushinteger(L, BLOCK_DESTRUCTION_RIFLE);   lua_setfield(L, -2, "RIFLE");
-    lua_pushinteger(L, BLOCK_DESTRUCTION_SMG);     lua_setfield(L, -2, "SMG");
-    lua_pushinteger(L, BLOCK_DESTRUCTION_SHOTGUN); lua_setfield(L, -2, "SHOTGUN");
-    lua_pushinteger(L, BLOCK_DESTRUCTION_GRENADE); lua_setfield(L, -2, "GRENADE");
-    lua_make_enum(L);
-    lua_setglobal(L, "BlockDestruction");
-
-    lua_newtable(L);
     lua_pushinteger(L, GAME_MODE_CTF);   lua_setfield(L, -2, "CTF");
     lua_pushinteger(L, GAME_MODE_TC);    lua_setfield(L, -2, "TC");
     lua_pushinteger(L, GAME_MODE_BABEL); lua_setfield(L, -2, "BABEL");

@@ -1282,15 +1282,15 @@ int lua_hook_block_place(server_t* server, player_t* player, block_t* block)
     return SCRIPTING_ALLOW;
 }
 
-int lua_hook_block_destroy(server_t* server, player_t* player, block_destruction_t reason, block_t* block)
+int lua_hook_block_destroy(server_t* server, player_t* player, tool_t tool, block_t* block)
 {
     (void)server;
     if (dispatch_deny_5i(g_server_lua, "on_block_destroy",
-                         player->id, block->x, block->y, block->z, (lua_Integer)reason)) {
+                         player->id, block->x, block->y, block->z, (lua_Integer)tool)) {
         return SCRIPTING_DENY;
     }
     if (dispatch_hooks_deny_5i(g_map_lua, "on_block_destroy",
-                                player->id, block->x, block->y, block->z, (lua_Integer)reason)) {
+                                player->id, block->x, block->y, block->z, (lua_Integer)tool)) {
         return SCRIPTING_DENY;
     }
     return SCRIPTING_ALLOW;

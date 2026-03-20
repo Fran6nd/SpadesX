@@ -97,7 +97,7 @@ void grenade_explode_at(server_t* server, player_t* player, vector3f_t pos)
                         if (valid_pos_3f(server, X, Y, z)) {
                             block_t blk = {X, Y, z, mapvxl_get_color(&server->s_map.map, X, Y, z)};
                             if (scripting_on_block_destroy(server, player,
-                                                           BLOCK_DESTRUCTION_GRENADE, &blk) == SCRIPTING_ALLOW)
+                                                           TOOL_GRENADE, &blk) == SCRIPTING_ALLOW)
                             {
                                 mapvxl_set_air(&server->s_map.map, X, Y, z);
                             }
