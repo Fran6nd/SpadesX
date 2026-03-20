@@ -13,6 +13,10 @@ gamemode = 0
 # Max flag captures
 capture_limit = 10
 
+# Maximum number of players allowed on the server (1-32).
+# The AoS 0.75 protocol hard-caps this at 32; values above 32 are clamped.
+max_players = 32
+
 # Enable this if you want your server to show up on the server list
 master = false
 
@@ -23,7 +27,7 @@ master = false
 # Each entry specifies the map name and an optional list of scripts from map_scripts/ to load.
 # Omit "scripts" to run a map with no scripts.
 maps = [
-    { name = "Border_Hallway", scripts = ["babel.lua", "restock_command.lua", "restock_on_kill.lua", "team_colors.lua", "bots.lua", "shotguns_are_grenade_launchers.lua"] },
+    { name = "Border_Hallway", scripts = ["restock_command.lua", "restock_on_kill.lua", "team_colors.lua", "bots.lua", "shotguns_are_grenade_launchers.lua"] },
 ]
 
 # Rotation modes:

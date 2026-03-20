@@ -30,6 +30,7 @@ int main(void)
     color_t     team1_color;
     color_t     team2_color;
     uint8_t     periodic_delays[5];
+    uint8_t     max_players;
 
     string_node_t* map_list              = NULL;
     string_node_t* welcome_message_list  = NULL;
@@ -52,6 +53,7 @@ int main(void)
     TOMLH_GET_BOOL(server_table, master, "master", 1, 0);
     TOMLH_GET_INT(server_table, gamemode, "gamemode", 0, 0);
     TOMLH_GET_INT(server_table, capture_limit, "capture_limit", 10, 0);
+    TOMLH_GET_INT(server_table, max_players, "max_players", 32, 0);
 
     // Parse maps: each entry is an inline table { name = "...", scripts = [...] }
     {
@@ -169,6 +171,7 @@ int main(void)
                         .team2_color               = team2_color,
                         .gamemode                  = gamemode,
                         .capture_limit             = capture_limit,
+                        .max_players               = max_players,
                         .map_rotation_mode         = rotation_mode};
 
     server_start(args);

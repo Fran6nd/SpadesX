@@ -84,7 +84,7 @@ static void* _calculate_physics(void)
 }
 
 static void _server_init(server_t*   server,
-                         uint32_t    connections,
+                         uint8_t     max_players,
                          const char* serverName,
                          const char* team1Name,
                          const char* team2Name,
@@ -96,7 +96,11 @@ static void _server_init(server_t*   server,
     server->global_timers.update_time = server->global_timers.last_update_time = get_nanos();
     if (reset == 0) {
         server->protocol.num_players = 0;
-        server->protocol.max_players = (connections <= 32) ? connections : 32;
+        if (max_players > 32) {
+            LOG_WARNING("max_players %u exceeds the AoS 0.75 protocol limit; clamping to 32", max_players);
+            max_players = 32;
+        }
+        server->protocol.max_players = max_players;
     }
 
     server->protocol.input_flags  = 0;
@@ -280,7 +284,7 @@ void server_reset(server_t* server)
     scripting_map_unload(server, server->map_name);
 
     _server_init(server,
-                 server->protocol.max_players,
+                 server->protocol.max_players, // already clamped on first init
                  server->server_name,
                  server->protocol.name_team[0],
                  server->protocol.name_team[1],
@@ -476,7 +480,7 @@ void server_start(server_args args)
     server.periodic_delays        = args.periodic_delays;
     server.capture_limit          = args.capture_limit;
     _server_init(&server,
-                 args.connections,
+                 args.max_players,
                  args.server_name,
                  args.team1_name,
                  args.team2_name,
