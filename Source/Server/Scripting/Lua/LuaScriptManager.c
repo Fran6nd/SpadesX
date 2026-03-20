@@ -355,6 +355,14 @@ void lua_mgr_register_command(lua_State* L, int func_ref,
         return;
     }
 
+    // Reject names that exceed the fixed buffer in lua_cmd_entry_t.
+    if (strlen(name) >= sizeof(((lua_cmd_entry_t*)0)->name)) {
+        LOG_ERROR("[Scripting] Command name too long (max %zu chars): %s",
+                  sizeof(((lua_cmd_entry_t*)0)->name) - 1, name);
+        luaL_unref(L, LUA_REGISTRYINDEX, func_ref);
+        return;
+    }
+
     // Reject if a command with this name already exists.
     command_t* existing = NULL;
     HASH_FIND_STR(g_server->cmds_map, name, existing);
