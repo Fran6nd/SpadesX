@@ -463,7 +463,8 @@ void server_start(server_args args)
         LOG_WARNING("Compress with range coder failed");
     }
 
-    server.port = args.port;
+    server.port     = args.port;
+    server.ban_file = args.ban_file;
 
     server.host->intercept = &raw_udp_intercept_callback;
 

@@ -19,6 +19,7 @@ int main(void)
     uint8_t     master;
     uint8_t     gamemode;
     uint8_t     capture_limit;
+    const char* ban_file;
     const char* manager_passwd;
     const char* admin_passwd;
     const char* mod_passwd;
@@ -54,6 +55,7 @@ int main(void)
     TOMLH_GET_INT(server_table, gamemode, "gamemode", 0, 0);
     TOMLH_GET_INT(server_table, capture_limit, "capture_limit", 10, 0);
     TOMLH_GET_INT(server_table, max_players, "max_players", 32, 0);
+    TOMLH_GET_STRING(server_table, ban_file, "ban_file", "Bans.json", 0);
 
     // Parse maps: each entry is an inline table { name = "...", scripts = [...] }
     {
@@ -159,6 +161,7 @@ int main(void)
                         .periodic_message_list     = periodic_message_list,
                         .periodic_message_list_len = periodic_message_list_len,
                         .periodic_delays           = periodic_delays,
+                        .ban_file                  = ban_file,
                         .manager_password          = manager_passwd,
                         .admin_password            = admin_passwd,
                         .mod_password              = mod_passwd,
@@ -176,6 +179,7 @@ int main(void)
 
     server_start(args);
 
+    free((char*) ban_file);
     free((char*) server_name);
     free((char*) manager_passwd);
     free((char*) admin_passwd);

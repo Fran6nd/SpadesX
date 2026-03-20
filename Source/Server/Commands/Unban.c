@@ -7,12 +7,12 @@
 
 void cmd_unban(void* p_server, command_args_t arguments)
 {
-    (void) p_server;
+    server_t* server = (server_t*) p_server;
     ip_t ip;
     if (arguments.argc == 2 && parse_ip(arguments.argv[1], &ip, NULL)) {
         uint8_t             unbanned = 0;
         struct json_object* array;
-        struct json_object* root = json_object_from_file("Bans.json");
+        struct json_object* root = json_object_from_file(server->ban_file);
         json_object_object_get_ex(root, "Bans", &array);
         int         count = json_object_array_length(array);
         const char* IPString;
@@ -23,7 +23,7 @@ void cmd_unban(void* p_server, command_args_t arguments)
             READ_STR_FROM_JSON(objectAtIndex, IPString, IP, "IP", "0.0.0.0", 1);
             if (strcmp(unbanIPString, IPString) == 0) {
                 json_object_array_del_idx(array, i, 1);
-                json_object_to_file("Bans.json", root);
+                json_object_to_file(server->ban_file, root);
                 unbanned = 1;
             }
         }
@@ -40,13 +40,13 @@ void cmd_unban(void* p_server, command_args_t arguments)
 
 void cmd_unban_range(void* p_server, command_args_t arguments)
 {
-    (void) p_server;
+    server_t* server = (server_t*) p_server;
     ip_t  start_range, end_range;
     char* end;
     if (arguments.argc == 2 && parse_ip(arguments.argv[1], &start_range, &end) && parse_ip(end, &end_range, NULL)) {
         uint8_t             unbanned = 0;
         struct json_object* array;
-        struct json_object* root = json_object_from_file("Bans.json");
+        struct json_object* root = json_object_from_file(server->ban_file);
         json_object_object_get_ex(root, "Bans", &array);
         int         count = json_object_array_length(array);
         const char* start_ip_string;
@@ -63,7 +63,7 @@ void cmd_unban_range(void* p_server, command_args_t arguments)
                 strcmp(unban_end_range_string, end_ip_string) == 0)
             {
                 json_object_array_del_idx(array, i, 1);
-                json_object_to_file("Bans.json", root);
+                json_object_to_file(server->ban_file, root);
                 unbanned = 1;
             }
         }
@@ -88,13 +88,13 @@ void cmd_unban_range(void* p_server, command_args_t arguments)
 
 void cmd_undo_ban(void* p_server, command_args_t arguments)
 {
-    (void) p_server;
+    server_t* server = (server_t*) p_server;
     if (arguments.argc == 1) {
         const char*         ip_string;
         const char*         start_ip;
         const char*         end_ip;
         struct json_object* array;
-        struct json_object* root = json_object_from_file("Bans.json");
+        struct json_object* root = json_object_from_file(server->ban_file);
         json_object_object_get_ex(root, "Bans", &array);
         int                 count         = json_object_array_length(array);
         struct json_object* objectAtIndex = json_object_array_get_idx(array, count - 1);
@@ -104,11 +104,11 @@ void cmd_undo_ban(void* p_server, command_args_t arguments)
             READ_STR_FROM_JSON(objectAtIndex, end_ip, end_of_range, "end of range", "0.0.0.0", 0);
             send_server_notice(arguments.player, arguments.console, "IP range %s-%s unbanned", start_ip, end_ip);
             json_object_array_del_idx(array, count - 1, 1);
-            json_object_to_file("Bans.json", root);
+            json_object_to_file(server->ban_file, root);
         } else {
             send_server_notice(arguments.player, arguments.console, "IP %s unbanned", ip_string);
             json_object_array_del_idx(array, count - 1, 1);
-            json_object_to_file("Bans.json", root);
+            json_object_to_file(server->ban_file, root);
         }
         json_object_put(root);
     } else {

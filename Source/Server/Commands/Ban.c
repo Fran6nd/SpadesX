@@ -88,7 +88,7 @@ void cmd_ban_range(void* p_server, command_args_t arguments)
             format_ip_to_str(ipStringEnd, endRange);
             struct json_object* array;
             struct json_object* ban        = json_object_new_object();
-            struct json_object* root       = json_object_from_file("Bans.json");
+            struct json_object* root       = json_object_from_file(server->ban_file);
             char*               nameString = "Deuce";
             json_object_object_get_ex(root, "Bans", &array);
 
@@ -120,7 +120,7 @@ void cmd_ban_range(void* p_server, command_args_t arguments)
                 json_object_object_add(ban, "Reason", json_object_new_string(reason));
             }
             json_object_array_add(array, ban);
-            json_object_to_file("Bans.json", root);
+            json_object_to_file(server->ban_file, root);
             send_server_notice(arguments.player,
                                arguments.console,
                                "IP range %s-%s has been permanently banned",

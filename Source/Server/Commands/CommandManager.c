@@ -44,7 +44,7 @@ void cmd_generate_ban(server_t* server, command_args_t arguments, float time, ip
     format_ip_to_str(ipString, ip);
     struct json_object* array;
     struct json_object* ban        = json_object_new_object();
-    struct json_object* root       = json_object_from_file("Bans.json");
+    struct json_object* root       = json_object_from_file(server->ban_file);
     char*               nameString = "Deuce";
     json_object_object_get_ex(root, "Bans", &array);
 
@@ -67,7 +67,7 @@ void cmd_generate_ban(server_t* server, command_args_t arguments, float time, ip
         json_object_object_add(ban, "Reason", json_object_new_string(reason));
     }
     json_object_array_add(array, ban);
-    json_object_to_file("Bans.json", root);
+    json_object_to_file(server->ban_file, root);
     json_object_put(root);
     if (time == 0) {
         send_server_notice(arguments.player, arguments.console, "IP %s has been permanently banned", ipString);

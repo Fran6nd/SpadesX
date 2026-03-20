@@ -17,6 +17,9 @@ capture_limit = 10
 # The AoS 0.75 protocol hard-caps this at 32; values above 32 are clamped.
 max_players = 32
 
+# Path to the ban list file (JSON)
+ban_file = "Bans.json"
+
 # Enable this if you want your server to show up on the server list
 master = false
 

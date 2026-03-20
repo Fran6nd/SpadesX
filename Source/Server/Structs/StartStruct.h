@@ -9,6 +9,7 @@ typedef struct server_args
     string_node_t* welcome_message_list;
     string_node_t* periodic_message_list;
     uint8_t*       periodic_delays;
+    const char*    ban_file;
     const char*    manager_password;
     const char*    admin_password;
     const char*    mod_password;

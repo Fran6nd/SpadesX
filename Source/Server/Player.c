@@ -383,18 +383,18 @@ void on_new_player_connection(server_t* server, ENetEvent* event)
         return;
     }
 
-    struct json_object* root = json_object_from_file("Bans.json");
+    struct json_object* root = json_object_from_file(server->ban_file);
     if (root == NULL) {
         FILE* fp;
-        fp = fopen("Bans.json", "w+");
+        fp = fopen(server->ban_file, "w+");
         if (fp == NULL) {
-            perror("Unable to open/create Bans.json with error: ");
+            perror("Unable to open/create ban file with error: ");
             exit(EXIT_FAILURE);
         }
         fclose(fp);
         root = json_object_new_object();
         json_object_object_add(root, "Bans", json_object_new_array());
-        json_object_to_file("Bans.json", root);
+        json_object_to_file(server->ban_file, root);
     }
     ip_t hostIP;
     hostIP.cidr  = 24;
@@ -429,7 +429,7 @@ void on_new_player_connection(server_t* server, ENetEvent* event)
                 READ_DOUBLE_FROM_JSON(object_at_index, time, Time, "Time", 0.0, 0);
                 if (((long double) timeNow / NANO_IN_MINUTE) > time && time != 0) {
                     json_object_array_del_idx(array, i, 1);
-                    json_object_to_file("Bans.json", root);
+                    json_object_to_file(server->ban_file, root);
                     continue; // Continue searching for bans and delete all the old ones that match host IP
                               // or its range
                 } else {
