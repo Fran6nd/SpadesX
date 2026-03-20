@@ -256,17 +256,14 @@ static void _server_init(server_t*   server,
     server->protocol.color_team[1].g = team2_color[G_CHANNEL];
     server->protocol.color_team[1].b = team2_color[B_CHANNEL];
 
-    memcpy(server->protocol.name_team[0], team1Name, strlen(team1Name));
-    memcpy(server->protocol.name_team[1], team2Name, strlen(team2Name));
-    server->protocol.name_team[0][strlen(team1Name)] = '\0';
-    server->protocol.name_team[1][strlen(team2Name)] = '\0';
+    snprintf(server->protocol.name_team[0], sizeof(server->protocol.name_team[0]), "%s", team1Name);
+    snprintf(server->protocol.name_team[1], sizeof(server->protocol.name_team[1]), "%s", team2Name);
     server->protocol.gamemode.score_limit = capture_limit;
 
     server->protocol.gamemode.water_damage_enabled = water_damage_enabled;
     server->protocol.gamemode.water_damage         = water_damage_per_second;
 
-    memcpy(server->server_name, serverName, strlen(serverName));
-    server->server_name[strlen(serverName)] = '\0';
+    snprintf(server->server_name, sizeof(server->server_name), "%s", serverName);
 
     // Per-map gamemode override: read before freeing the TOML tree.
     // If the field is absent the server default 'gamemode' is used unchanged.
