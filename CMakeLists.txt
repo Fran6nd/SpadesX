@@ -49,11 +49,9 @@ set_target_properties(SpadesX Util Server
 
 configure_file(${PROJECT_SOURCE_DIR}/Resources/config.toml ${CMAKE_BINARY_DIR}/config.toml COPYONLY)
 
-# Copy Resources directory structure to build directory
+# Copy Resources directory structure to build directory (always, to pick up new maps/scripts)
 # This includes the maps folder structure (Resources/maps/MapName/MapName.{vxl,toml})
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/Resources)
-    file(COPY ${PROJECT_SOURCE_DIR}/Resources/ DESTINATION ${CMAKE_BINARY_DIR}/Resources)
-endif()
+file(COPY ${PROJECT_SOURCE_DIR}/Resources/ DESTINATION ${CMAKE_BINARY_DIR}/Resources)
 
 # Copy scripts directory to build dir (server-wide Lua scripts)
 file(COPY ${PROJECT_SOURCE_DIR}/Resources/scripts DESTINATION ${CMAKE_BINARY_DIR})

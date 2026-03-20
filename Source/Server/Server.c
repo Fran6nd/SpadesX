@@ -101,7 +101,7 @@ static void _server_init(server_t*   server,
 
     server->protocol.input_flags  = 0;
 
-    char    vxl_map[64];
+    char    vxl_map[128];
     uint8_t index;
     if (reset == 0) {
         server->rand = seed_rand(time(NULL));
@@ -154,11 +154,13 @@ static void _server_init(server_t*   server,
     server->map_scripts_count = server->s_map.current_map->scripts_count;
     LOG_STATUS("Selecting %s as map", server->map_name);
 
-    snprintf(vxl_map, 64, "%s.vxl", server->s_map.current_map->string);
+    snprintf(vxl_map, 128, "Resources/maps/%s/%s.vxl",
+             server->s_map.current_map->string, server->s_map.current_map->string);
 
     LOG_STATUS("Loading spawn ranges from map file");
-    char map_config_path[64];
-    snprintf(map_config_path, 64, "%s.toml", server->s_map.current_map->string);
+    char map_config_path[128];
+    snprintf(map_config_path, 128, "Resources/maps/%s/%s.toml",
+             server->s_map.current_map->string, server->s_map.current_map->string);
 
     int         team1_start[3];
     int         team2_start[3];

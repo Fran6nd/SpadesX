@@ -1,4 +1,4 @@
--- shotgun_are_grenade_launchers.lua
+-- shotguns_are_grenade_launchers.lua
 --
 -- Each shotgun shot that connects with a player or destroys a block triggers
 -- a real grenade explosion at the point of impact, attributed to the shooter.
