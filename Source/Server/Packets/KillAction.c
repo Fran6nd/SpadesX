@@ -43,7 +43,11 @@ void send_kill_action_packet(server_t* server,
     }
     if (sent == 0) {
         enet_packet_destroy(packet);
-        return; // Do not kill the player since sending the packet failed
+        // If the target is a bot, still apply the kill server-side even though
+        // no real player received the packet (e.g. empty server).
+        if (!player->is_bot) {
+            return;
+        }
     }
     if (!makeInvisible && player->is_invisible == 0) {
         if (killer != player) {

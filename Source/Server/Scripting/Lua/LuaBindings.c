@@ -269,9 +269,8 @@ static int l_player_kill(lua_State* L)
 {
     server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     player_t* p = get_player_arg(L, server, 1);
-    if (p) {
-        p->hp    = 0;
-        p->alive = 0;
+    if (p && server) {
+        send_kill_action_packet(server, p, p, 0, 5, 0);
     }
     return 0;
 }
