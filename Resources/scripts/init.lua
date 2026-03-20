@@ -27,8 +27,8 @@ function on_player_disconnect(player_id, reason)
     server.broadcast(name .. " left the game.")
 end
 
--- Example custom command: /players
-server.register_command("/players", "List connected players", function(player_id, args)
+-- /players — available to everyone (permissions = 0)
+server.register_command("/players", "List all connected players", function(player_id, args)
     local count = player.count()
     local msg = "Players online: " .. count
     for id, name in player.iterate() do
@@ -36,3 +36,12 @@ server.register_command("/players", "List connected players", function(player_id
     end
     player.send_notice(player_id, msg)
 end, 0)
+
+-- /kill_all — admin-only example (permissions = 30, same bitmask as built-in admin commands)
+-- Only players who have logged in with an admin role can see and run this command.
+server.register_command("/kill_all", "Kill all players on the server (admin only)", function(player_id, args)
+    for id, name in player.iterate() do
+        player.kill(id)
+    end
+    server.broadcast("All players were killed by an admin.")
+end, 30)
