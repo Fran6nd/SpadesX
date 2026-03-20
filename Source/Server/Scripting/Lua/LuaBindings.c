@@ -373,6 +373,7 @@ static const luaL_Reg player_shared_lib[] = {
     {"kill",                l_player_kill},
     {"restock",             l_player_restock},
     {"send_notice",         l_player_send_notice},
+    {"explode",             l_player_explode},
     {NULL, NULL}
 };
 
@@ -1024,11 +1025,11 @@ static int l_server_get_score(lua_State* L)
     return 1;
 }
 
-// server.explode(player_id, x, y, z)
-// Triggers a full grenade explosion at (x, y, z), attributed to player_id.
-// Sends the visual block-action packet, applies area damage to all ready players,
+// player.explode(player_id, x, y, z)
+// Triggers a full grenade explosion at (x, y, z) attributed to the given player.
+// Broadcasts the grenade visual, applies area damage to all ready players,
 // and destroys blocks in the standard grenade radius.
-static int l_server_explode(lua_State* L)
+static int l_player_explode(lua_State* L)
 {
     server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     player_t* player = get_player_arg(L, server, 1);
@@ -1056,7 +1057,6 @@ static const luaL_Reg server_lib[] = {
     {"set_capture_limit",   l_server_set_capture_limit},
     {"get_gamemode",        l_server_get_gamemode},
     {"get_score",           l_server_get_score},
-    {"explode",             l_server_explode},
     {NULL, NULL}
 };
 
