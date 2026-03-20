@@ -88,7 +88,16 @@ typedef enum {
     WEAPON_RIFLE   = 0,
     WEAPON_SMG     = 1,
     WEAPON_SHOTGUN = 2,
+    WEAPON_GRENADE = 3,
 } weapon_t;
+
+typedef enum {
+    BLOCK_DESTRUCTION_SPADE   = 0,
+    BLOCK_DESTRUCTION_RIFLE   = 1,
+    BLOCK_DESTRUCTION_SMG     = 2,
+    BLOCK_DESTRUCTION_SHOTGUN = 3,
+    BLOCK_DESTRUCTION_GRENADE = 4,
+} block_destruction_t;
 
 typedef enum {
     INTEL_TEAM_A    = 1,

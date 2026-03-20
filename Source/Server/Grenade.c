@@ -69,7 +69,10 @@ void grenade_explode_at(server_t* server, player_t* player, vector3f_t pos)
     {
         if (connected_player->state == STATE_READY) {
             uint8_t value = get_grenade_damage(server, connected_player, &fake);
-            if (value > 0) {
+            if (value > 0 &&
+                scripting_on_player_hit(server, player, connected_player,
+                                        HIT_TYPE_TORSO, WEAPON_GRENADE) == SCRIPTING_ALLOW)
+            {
                 send_set_hp(server, player, connected_player, value, 1, 3, 5, 1, pos);
             }
         }
@@ -91,8 +94,14 @@ void grenade_explode_at(server_t* server, player_t* player, vector3f_t pos)
                 for (int X = x_rounded; X < x_rounded + 3; ++X) {
                     for (int Y = y_rounded; Y < y_rounded + 3; ++Y)
                     { // I hate nested loops as any other C dev but here they do not cost that much perf
-                        if (valid_pos_3f(server, X, Y, z))
-                            mapvxl_set_air(&server->s_map.map, X, Y, z);
+                        if (valid_pos_3f(server, X, Y, z)) {
+                            block_t blk = {X, Y, z, mapvxl_get_color(&server->s_map.map, X, Y, z)};
+                            if (scripting_on_block_destroy(server, player,
+                                                           BLOCK_DESTRUCTION_GRENADE, &blk) == SCRIPTING_ALLOW)
+                            {
+                                mapvxl_set_air(&server->s_map.map, X, Y, z);
+                            }
+                        }
                     }
                 }
             }

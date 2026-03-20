@@ -51,8 +51,18 @@ block_action_destroy_one(server_t* server, player_t* player, uint8_t action_type
 
     uint32_t block_color = mapvxl_get_color(&server->s_map.map, X, Y, Z);
     block_t  block       = {X, Y, Z, block_color};
-    uint8_t  tool        = player->item;
-    if (scripting_on_block_destroy(server, player, tool, &block) == SCRIPTING_DENY) {
+    block_destruction_t reason;
+    if (player->item == TOOL_GUN) {
+        switch (player->weapon) {
+            case WEAPON_RIFLE:   reason = BLOCK_DESTRUCTION_RIFLE;   break;
+            case WEAPON_SMG:     reason = BLOCK_DESTRUCTION_SMG;     break;
+            case WEAPON_SHOTGUN: reason = BLOCK_DESTRUCTION_SHOTGUN; break;
+            default:             reason = BLOCK_DESTRUCTION_RIFLE;   break;
+        }
+    } else {
+        reason = BLOCK_DESTRUCTION_SPADE;
+    }
+    if (scripting_on_block_destroy(server, player, reason, &block) == SCRIPTING_DENY) {
         return;
     }
 
@@ -84,8 +94,7 @@ block_action_destroy_three(server_t* server, player_t* player, uint8_t action_ty
 
     uint32_t block_color = mapvxl_get_color(&server->s_map.map, X, Y, Z);
     block_t  block       = {X, Y, Z, block_color};
-    uint8_t  tool        = player->item;
-    if (scripting_on_block_destroy(server, player, tool, &block) == SCRIPTING_DENY) {
+    if (scripting_on_block_destroy(server, player, BLOCK_DESTRUCTION_SPADE, &block) == SCRIPTING_DENY) {
         return;
     }
 

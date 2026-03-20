@@ -72,9 +72,9 @@ int scripting_on_block_place(server_t* server, player_t* player, block_t* block)
     return lua_hook_block_place(server, player, block);
 }
 
-int scripting_on_block_destroy(server_t* server, player_t* player, uint8_t tool, block_t* block)
+int scripting_on_block_destroy(server_t* server, player_t* player, block_destruction_t reason, block_t* block)
 {
-    return lua_hook_block_destroy(server, player, tool, block);
+    return lua_hook_block_destroy(server, player, reason, block);
 }
 
 int scripting_on_player_hit(server_t* server, player_t* shooter, player_t* victim,

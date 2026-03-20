@@ -691,6 +691,7 @@ void for_players(server_t* server)
                         }
                         break;
                     }
+                    default: break;
                 }
             }
             if (diff_is_older_then(timeNow,

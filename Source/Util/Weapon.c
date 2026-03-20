@@ -23,6 +23,7 @@ void set_default_player_ammo(player_t* player)
             player->default_clip    = SHOTGUN_DEFAULT_CLIP;
             player->default_reserve = SHOTGUN_DEFAULT_RESERVE;
             break;
+        default: break;
     }
 }
 
@@ -38,6 +39,7 @@ void set_default_player_ammo_reserve(player_t* player)
         case WEAPON_SHOTGUN:
             player->weapon_reserve = 48;
             break;
+        default: break;
     }
 }
 
@@ -52,6 +54,7 @@ inline void set_default_player_pellets(player_t* player)
         case WEAPON_SHOTGUN:
             pellets = 8;
             break;
+        default: break;
     }
 
     if(player->weapon_pellets != pellets) {
@@ -78,6 +81,7 @@ uint64_t get_player_weapon_delay_nano(player_t* player)
             delay = NANO_IN_MILLI * 1000;
             break;
         }
+        default: break;
     }
     return delay;
 }

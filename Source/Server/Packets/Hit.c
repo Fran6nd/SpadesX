@@ -131,6 +131,7 @@ void receive_hit_packet(server_t* server, player_t* player, stream_t* data)
                 }
                 break;
             }
+            default: break;
         }
         if (hit_type == HIT_TYPE_MELEE) {
             send_set_hp(server, player, hit_player, 80, 1, 2, 5, 0, shot_pos);

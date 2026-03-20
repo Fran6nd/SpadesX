@@ -496,35 +496,6 @@ static int dispatch_deny_1i_3f(lua_State* L, const char* fn,
     return denied;
 }
 
-// Deny hook: (player_id, x, y, z) — used for block_destroy.
-// Returns 1 if the script returned false, 0 otherwise.
-static int dispatch_deny_4i(lua_State* L, const char* fn,
-                              lua_Integer pid,
-                              lua_Integer x, lua_Integer y, lua_Integer z)
-{
-    if (!L) {
-        return 0;
-    }
-    int base = lua_gettop(L);
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 1);
-        return 0;
-    }
-    lua_pushinteger(L, pid);
-    lua_pushinteger(L, x);
-    lua_pushinteger(L, y);
-    lua_pushinteger(L, z);
-    if (lua_pcall(L, 4, 1, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_settop(L, base);
-        return 0;
-    }
-    int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
-    lua_settop(L, base);
-    return denied;
-}
-
 // Deny hook: (shooter_id, victim_id, hit_type, weapon) — for player_hit.
 static int dispatch_deny_4i_hit(lua_State* L, const char* fn,
                                   lua_Integer shooter, lua_Integer victim,
@@ -802,10 +773,32 @@ static int dispatch_hooks_deny_1i_3f(lua_State* L, const char* event,
     return 0;
 }
 
+/// Deny hook: (a, b, c, d, e) — five integer arguments.
+static int dispatch_deny_5i(lua_State* L, const char* fn,
+                              lua_Integer a, lua_Integer b, lua_Integer c,
+                              lua_Integer d, lua_Integer e)
+{
+    if (!L) return 0;
+    int base = lua_gettop(L);
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return 0; }
+    lua_pushinteger(L, a); lua_pushinteger(L, b); lua_pushinteger(L, c);
+    lua_pushinteger(L, d); lua_pushinteger(L, e);
+    if (lua_pcall(L, 5, 1, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_settop(L, base);
+        return 0;
+    }
+    int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
+    lua_settop(L, base);
+    return denied;
+}
+
+
 // Returns 1 if any handler returned false (deny), 0 otherwise.
-static int dispatch_hooks_deny_4i(lua_State* L, const char* event,
-                                   lua_Integer a, lua_Integer b,
-                                   lua_Integer c, lua_Integer d)
+static int dispatch_hooks_deny_5i(lua_State* L, const char* event,
+                                   lua_Integer a, lua_Integer b, lua_Integer c,
+                                   lua_Integer d, lua_Integer e)
 {
     if (!L) return 0;
     lua_getglobal(L, "_registered_hooks");
@@ -814,9 +807,9 @@ static int dispatch_hooks_deny_4i(lua_State* L, const char* event,
     int n = (int)lua_rawlen(L, -1);
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
-        lua_pushinteger(L, a); lua_pushinteger(L, b);
-        lua_pushinteger(L, c); lua_pushinteger(L, d);
-        if (lua_pcall(L, 4, 1, 0) == LUA_OK) {
+        lua_pushinteger(L, a); lua_pushinteger(L, b); lua_pushinteger(L, c);
+        lua_pushinteger(L, d); lua_pushinteger(L, e);
+        if (lua_pcall(L, 5, 1, 0) == LUA_OK) {
             int denied = lua_isboolean(L, -1) && !lua_toboolean(L, -1);
             lua_pop(L, 1);
             if (denied) { lua_pop(L, 2); return 1; }
@@ -1289,16 +1282,15 @@ int lua_hook_block_place(server_t* server, player_t* player, block_t* block)
     return SCRIPTING_ALLOW;
 }
 
-int lua_hook_block_destroy(server_t* server, player_t* player, uint8_t tool, block_t* block)
+int lua_hook_block_destroy(server_t* server, player_t* player, block_destruction_t reason, block_t* block)
 {
     (void)server;
-    (void)tool;
-    if (dispatch_deny_4i(g_server_lua, "on_block_destroy",
-                         player->id, block->x, block->y, block->z)) {
+    if (dispatch_deny_5i(g_server_lua, "on_block_destroy",
+                         player->id, block->x, block->y, block->z, (lua_Integer)reason)) {
         return SCRIPTING_DENY;
     }
-    if (dispatch_hooks_deny_4i(g_map_lua, "on_block_destroy",
-                                player->id, block->x, block->y, block->z)) {
+    if (dispatch_hooks_deny_5i(g_map_lua, "on_block_destroy",
+                                player->id, block->x, block->y, block->z, (lua_Integer)reason)) {
         return SCRIPTING_DENY;
     }
     return SCRIPTING_ALLOW;

@@ -74,6 +74,7 @@ void send_kill_action_packet(server_t* server,
                 player->default_clip    = SHOTGUN_DEFAULT_CLIP;
                 player->default_reserve = SHOTGUN_DEFAULT_RESERVE;
                 break;
+            default: break;
         }
     }
 }
