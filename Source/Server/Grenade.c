@@ -65,6 +65,22 @@ void grenade_explode_at(server_t* server, player_t* player, vector3f_t pos)
         send_block_action(server, player, 3, floor(pos.x), floor(pos.y), floor(pos.z));
         allowToDestroy = 1;
     }
+    // If the explosion center is inside a solid block (e.g. triggered from
+    // on_block_destroy before the block has been removed), physics_can_see
+    // would fail for every player, resulting in zero damage.  Temporarily
+    // clear the voxel so the LOS check works, then restore it so the normal
+    // block-removal path is unaffected.
+    int      bx        = (int)floorf(pos.x);
+    int      by        = (int)floorf(pos.y);
+    int      bz        = (int)floorf(pos.z);
+    uint8_t  was_solid = valid_pos_3f(server, bx, by, bz) &&
+                         mapvxl_is_solid(&server->s_map.map, bx, by, bz);
+    uint32_t saved_color = 0;
+    if (was_solid) {
+        saved_color = mapvxl_get_color(&server->s_map.map, bx, by, bz);
+        mapvxl_set_air(&server->s_map.map, bx, by, bz);
+    }
+
     grenade_t fake = {0};
     fake.position  = pos;
     player_t *connected_player, *tmp_player;
@@ -79,6 +95,10 @@ void grenade_explode_at(server_t* server, player_t* player, vector3f_t pos)
                 send_set_hp(server, player, connected_player, value, 1, 3, 5, 1, pos);
             }
         }
+    }
+
+    if (was_solid) {
+        mapvxl_set_color(&server->s_map.map, bx, by, bz, saved_color);
     }
     float x = pos.x;
     float y = pos.y;
