@@ -1004,6 +1004,24 @@ static int l_server_set_capture_limit(lua_State* L)
     return 0;
 }
 
+// server.explode(x, y, z)
+// Triggers a server-originated explosion at (x, y, z) with no player attribution.
+// Applies area damage and block destruction; broadcasts a grenade visual with the
+// server sentinel id (32) so clients still see the explosion effect.
+static int l_server_explode(lua_State* L)
+{
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    if (!server) {
+        return 0;
+    }
+    vector3f_t pos;
+    pos.x = (float)luaL_checknumber(L, 1);
+    pos.y = (float)luaL_checknumber(L, 2);
+    pos.z = (float)luaL_checknumber(L, 3);
+    grenade_explode_at_server(server, pos);
+    return 0;
+}
+
 // server.get_gamemode() → integer (GameMode enum value)
 static int l_server_get_gamemode(lua_State* L)
 {
@@ -1057,6 +1075,7 @@ static const luaL_Reg server_lib[] = {
     {"set_capture_limit",   l_server_set_capture_limit},
     {"get_gamemode",        l_server_get_gamemode},
     {"get_score",           l_server_get_score},
+    {"explode",             l_server_explode},
     {NULL, NULL}
 };
 

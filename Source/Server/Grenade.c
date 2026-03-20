@@ -145,6 +145,22 @@ void grenade_explode_at(server_t* server, player_t* player, vector3f_t pos)
     move_intel_and_tent_down(server);
 }
 
+void grenade_explode_at_server(server_t* server, vector3f_t pos)
+{
+    // Build a minimal fake player that satisfies all field accesses inside
+    // grenade_explode_at without mapping to any real connected player.
+    // id=32 is the server sentinel (valid players occupy 0-31).
+    // team=0xFF never matches TEAM_A/TEAM_B/TEAM_SPECTATOR so the team-kill
+    // guard in send_set_hp is never triggered.
+    player_t srv;
+    memset(&srv, 0, sizeof(srv));
+    srv.id               = 32;
+    srv.team             = (team_t)0xFF;
+    srv.allow_killing    = 1;
+    srv.alive            = 1;
+    grenade_explode_at(server, &srv, pos);
+}
+
 void handle_grenade(server_t* server, player_t* player)
 {
     grenade_t* grenade;
