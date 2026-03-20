@@ -57,6 +57,9 @@ uint8_t get_grenade_damage(server_t* server, player_t* damaged_player, grenade_t
 
 void grenade_explode_at(server_t* server, player_t* player, vector3f_t pos)
 {
+    vector3f_t zero = {0, 0, 0};
+    send_grenade_to_all(server, player, 0.0f, pos, zero);
+
     uint8_t allowToDestroy = 0;
     if (grenadeGamemodeCheck(server, pos)) {
         send_block_action(server, player, 3, floor(pos.x), floor(pos.y), floor(pos.z));

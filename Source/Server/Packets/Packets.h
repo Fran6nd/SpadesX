@@ -27,6 +27,7 @@ void send_intel_capture(server_t* server, player_t* player, uint8_t winning);
 void send_intel_pickup(server_t* server, player_t* player);
 void send_intel_drop(server_t* server, player_t* player);
 void send_grenade(server_t* server, player_t* player, float fuse, vector3f_t position, vector3f_t velocity);
+void send_grenade_to_all(server_t* server, player_t* player, float fuse, vector3f_t position, vector3f_t velocity);
 void send_player_left(server_t* server, player_t* player);
 void send_weapon_reload(server_t* server, player_t* player, uint8_t startAnimation, uint8_t clip, uint8_t reserve);
 void send_weapon_input(server_t* server, player_t* player, uint8_t wInput);

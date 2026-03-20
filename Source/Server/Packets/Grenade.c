@@ -13,11 +13,8 @@
 #include <Util/Alloc.h>
 #include <math.h>
 
-void send_grenade(server_t* server, player_t* player, float fuse, vector3f_t position, vector3f_t velocity)
+static ENetPacket* build_grenade_packet(player_t* player, float fuse, vector3f_t position, vector3f_t velocity)
 {
-    if (server->protocol.num_players == 0) {
-        return;
-    }
     ENetPacket* packet = enet_packet_create(NULL, 30, ENET_PACKET_FLAG_RELIABLE);
     stream_t    stream = {packet->data, packet->dataLength, 0};
     stream_write_u8(&stream, PACKET_TYPE_GRENADE_PACKET);
@@ -29,7 +26,36 @@ void send_grenade(server_t* server, player_t* player, float fuse, vector3f_t pos
     stream_write_f(&stream, velocity.x);
     stream_write_f(&stream, velocity.y);
     stream_write_f(&stream, velocity.z);
+    return packet;
+}
+
+void send_grenade(server_t* server, player_t* player, float fuse, vector3f_t position, vector3f_t velocity)
+{
+    if (server->protocol.num_players == 0) {
+        return;
+    }
+    ENetPacket* packet = build_grenade_packet(player, fuse, position, velocity);
     if (send_packet_except_sender(server, packet, player) == 0) {
+        enet_packet_destroy(packet);
+    }
+}
+
+void send_grenade_to_all(server_t* server, player_t* player, float fuse, vector3f_t position, vector3f_t velocity)
+{
+    if (server->protocol.num_players == 0) {
+        return;
+    }
+    ENetPacket* packet = build_grenade_packet(player, fuse, position, velocity);
+    uint8_t   sent = 0;
+    player_t *recv, *tmp;
+    HASH_ITER(hh, server->players, recv, tmp) {
+        if (is_past_join_screen(recv) && !recv->is_bot) {
+            if (enet_peer_send(recv->peer, 0, packet) == 0) {
+                sent = 1;
+            }
+        }
+    }
+    if (sent == 0) {
         enet_packet_destroy(packet);
     }
 }
