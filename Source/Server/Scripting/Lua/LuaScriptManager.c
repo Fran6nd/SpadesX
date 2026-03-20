@@ -184,7 +184,7 @@ static lua_State* new_state(server_t* server)
     }
     luaL_openlibs(L);
     store_server(L, server);
-    lua_bindings_register(L);
+    lua_bindings_register(L, server);
     return L;
 }
 

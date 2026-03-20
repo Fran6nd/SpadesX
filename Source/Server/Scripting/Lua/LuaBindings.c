@@ -59,10 +59,9 @@ static void lua_make_enum(lua_State* L)
 
 // Retrieve the server and look up a player by id.
 // Pushes nil and returns NULL if the player is not found.
-static player_t* get_player_arg(lua_State* L, int arg_idx)
+static player_t* get_player_arg(lua_State* L, server_t* server, int arg_idx)
 {
     lua_Integer id = luaL_checkinteger(L, arg_idx);
-    server_t* server = lua_mgr_get_server(L);
     if (!server) {
         return NULL;
     }
@@ -78,21 +77,23 @@ static player_t* get_player_arg(lua_State* L, int arg_idx)
 
 static int l_player_count(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_pushinteger(L, server ? server->protocol.num_players : 0);
     return 1;
 }
 
 static int l_player_get_name(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     lua_pushstring(L, p ? p->name : "");
     return 1;
 }
 
 static int l_player_get_team(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     if (!p) {
         lua_pushnil(L);
         return 1;
@@ -103,7 +104,8 @@ static int l_player_get_team(lua_State* L)
 
 static int l_player_get_weapon(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     if (!p) {
         lua_pushnil(L);
         return 1;
@@ -116,8 +118,8 @@ static int l_player_get_weapon(lua_State* L)
 // all connected clients (ExistingPlayer for metadata, CreatePlayer if alive).
 static int l_bot_set_team(lua_State* L)
 {
-    server_t* server   = lua_mgr_get_server(L);
-    player_t* p        = get_player_arg(L, 1);
+    server_t* server   = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p        = get_player_arg(L, server, 1);
     lua_Integer team   = luaL_checkinteger(L, 2);
     if (!server || !p || !p->is_bot) {
         return 0;
@@ -143,8 +145,8 @@ static int l_bot_set_team(lua_State* L)
 // update to all connected clients.
 static int l_bot_set_weapon(lua_State* L)
 {
-    server_t* server    = lua_mgr_get_server(L);
-    player_t* p         = get_player_arg(L, 1);
+    server_t* server    = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p         = get_player_arg(L, server, 1);
     lua_Integer weapon  = luaL_checkinteger(L, 2);
     if (!server || !p || !p->is_bot) {
         return 0;
@@ -169,14 +171,16 @@ static int l_bot_set_weapon(lua_State* L)
 
 static int l_player_get_hp(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     lua_pushinteger(L, p ? p->hp : 0);
     return 1;
 }
 
 static int l_player_set_hp(lua_State* L)
 {
-    player_t* p  = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p  = get_player_arg(L, server, 1);
     lua_Integer hp = luaL_checkinteger(L, 2);
     if (p && hp >= 0 && hp <= 100) {
         p->hp = (uint8_t)hp;
@@ -189,7 +193,8 @@ static int l_player_set_hp(lua_State* L)
 
 static int l_player_get_position(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     if (!p) {
         lua_pushnil(L);
         return 1;
@@ -203,7 +208,8 @@ static int l_player_get_position(lua_State* L)
 
 static int l_player_set_position(lua_State* L)
 {
-    player_t*   p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t*   p = get_player_arg(L, server, 1);
     lua_vec3_t* v = lua_check_vec3(L, 2);
     if (p && v->x >= 0 && v->x < 512 && v->y >= 0 && v->y < 512 &&
         v->z >= 0 && v->z < 64)
@@ -217,7 +223,8 @@ static int l_player_set_position(lua_State* L)
 
 static int l_player_get_color(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     if (!p) {
         lua_pushnil(L);
         return 1;
@@ -228,7 +235,8 @@ static int l_player_get_color(lua_State* L)
 
 static int l_player_set_color(lua_State* L)
 {
-    player_t*    p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t*    p = get_player_arg(L, server, 1);
     lua_color_t* c = lua_check_color(L, 2);
     if (p) {
         p->tool_color.raw = ((uint32_t)c->r << 16) |
@@ -240,8 +248,8 @@ static int l_player_set_color(lua_State* L)
 
 static int l_player_set_color_broadcast(lua_State* L)
 {
-    server_t*    server = lua_mgr_get_server(L);
-    player_t*    p      = get_player_arg(L, 1);
+    server_t*    server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t*    p      = get_player_arg(L, server, 1);
     lua_color_t* c      = lua_check_color(L, 2);
     if (server && p) {
         color_t color;
@@ -257,7 +265,8 @@ static int l_player_set_color_broadcast(lua_State* L)
 
 static int l_player_kill(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     if (p) {
         p->hp    = 0;
         p->alive = 0;
@@ -267,8 +276,8 @@ static int l_player_kill(lua_State* L)
 
 static int l_player_restock(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* p      = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p      = get_player_arg(L, server, 1);
     if (server && p) {
         p->blocks   = 50;
         p->grenades = 3;
@@ -279,7 +288,8 @@ static int l_player_restock(lua_State* L)
 
 static int l_player_send_notice(lua_State* L)
 {
-    player_t*   p   = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t*   p   = get_player_arg(L, server, 1);
     const char* msg = luaL_checkstring(L, 2);
     if (p) {
         send_server_notice(p, 0, "%s", msg);
@@ -289,28 +299,32 @@ static int l_player_send_notice(lua_State* L)
 
 static int l_player_is_bot(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     lua_pushboolean(L, p ? p->is_bot : 0);
     return 1;
 }
 
 static int l_player_get_blocks(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     lua_pushinteger(L, p ? p->blocks : 0);
     return 1;
 }
 
 static int l_player_get_grenades(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     lua_pushinteger(L, p ? p->grenades : 0);
     return 1;
 }
 
 static int l_player_get_tool(lua_State* L)
 {
-    player_t* p = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
     lua_pushinteger(L, p ? p->item : 0);
     return 1;
 }
@@ -333,7 +347,7 @@ static int l_player_iterate_next(lua_State* L)
 
 static int l_player_iterate(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_pushlightuserdata(L, server ? server->players : NULL);
     lua_pushcclosure(L, l_player_iterate_next, 1);
     return 1;
@@ -419,9 +433,9 @@ static void lua_ref_controller(lua_State* L, player_t* bot, int arg_idx)
 
 // Helper: retrieve server + bot player; validates is_bot.
 // Returns NULL (pushing nil) if not found or not a bot.
-static player_t* get_bot_arg(lua_State* L, int arg_idx)
+static player_t* get_bot_arg(lua_State* L, server_t* server, int arg_idx)
 {
-    player_t* p = get_player_arg(L, arg_idx);
+    player_t* p = get_player_arg(L, server, arg_idx);
     if (!p || !p->is_bot) {
         return NULL;
     }
@@ -432,7 +446,7 @@ static player_t* get_bot_arg(lua_State* L, int arg_idx)
 // Bot starts as spectator. Call bot.set_team(), bot.set_weapon(), then bot.spawn().
 static int l_bot_create(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     const char* name   = luaL_checkstring(L, 1);
     if (!server) {
         lua_pushnil(L);
@@ -450,7 +464,8 @@ static int l_bot_create(lua_State* L)
 // bot.set_controller(id, controller | nil)
 static int l_bot_set_controller(lua_State* L)
 {
-    player_t* bot = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot = get_bot_arg(L, server, 1);
     if (!bot) {
         return 0;
     }
@@ -461,8 +476,8 @@ static int l_bot_set_controller(lua_State* L)
 // bot.destroy(id)
 static int l_bot_destroy(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     if (server && bot) {
         destroy_bot(server, bot);
     }
@@ -476,7 +491,8 @@ static int l_bot_destroy(lua_State* L)
 // transitions to STATE_READY. This is the same path real players take.
 static int l_bot_spawn(lua_State* L)
 {
-    player_t* bot = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot = get_bot_arg(L, server, 1);
     if (!bot) {
         return 0;
     }
@@ -493,8 +509,8 @@ static int l_bot_spawn(lua_State* L)
 // bot.move(id, fwd, back, left, right)
 static int l_bot_move(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     if (!server || !bot) {
         return 0;
     }
@@ -524,7 +540,8 @@ static int l_bot_move(lua_State* L)
 // the normal world-update loop broadcasts bot orientations to real players each tick).
 static int l_bot_look(lua_State* L)
 {
-    player_t*   bot = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t*   bot = get_bot_arg(L, server, 1);
     lua_vec3_t* dir = lua_check_vec3(L, 2);
     if (!bot) {
         return 0;
@@ -539,7 +556,8 @@ static int l_bot_look(lua_State* L)
 // Computes and sets the normalized forward vector; no-op if already at that point.
 static int l_bot_lookat_point(lua_State* L)
 {
-    player_t*   bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t*   bot    = get_bot_arg(L, server, 1);
     lua_vec3_t* target = lua_check_vec3(L, 2);
     if (!bot) {
         return 0;
@@ -560,8 +578,9 @@ static int l_bot_lookat_point(lua_State* L)
 // bot.lookat_player(id, target_id) — aim the bot toward another player's eye position.
 static int l_bot_lookat_player(lua_State* L)
 {
-    player_t* bot    = get_bot_arg(L, 1);
-    player_t* target = get_player_arg(L, 2);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
+    player_t* target = get_player_arg(L, server, 2);
     if (!bot || !target || target->state != STATE_READY) {
         return 0;
     }
@@ -581,8 +600,8 @@ static int l_bot_lookat_player(lua_State* L)
 // bot.jump(id)
 static int l_bot_jump(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     if (!server || !bot) {
         return 0;
     }
@@ -595,8 +614,8 @@ static int l_bot_jump(lua_State* L)
 // bot.crouch(id, enabled)
 static int l_bot_crouch(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     if (!server || !bot) {
         return 0;
     }
@@ -616,8 +635,8 @@ static int l_bot_crouch(lua_State* L)
 // bot.sprint(id, enabled)
 static int l_bot_sprint(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     if (!server || !bot) {
         return 0;
     }
@@ -637,8 +656,8 @@ static int l_bot_sprint(lua_State* L)
 // bot.fire(id, primary, secondary)
 static int l_bot_fire(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     if (!server || !bot) {
         return 0;
     }
@@ -656,8 +675,8 @@ static int l_bot_fire(lua_State* L)
 // bot.reload(id)
 static int l_bot_reload(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     if (!server || !bot) {
         return 0;
     }
@@ -673,8 +692,8 @@ static int l_bot_reload(lua_State* L)
 // bot.set_tool(id, tool)
 static int l_bot_set_tool(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* bot    = get_bot_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* bot    = get_bot_arg(L, server, 1);
     lua_Integer tool = luaL_checkinteger(L, 2);
     if (!server || !bot) {
         return 0;
@@ -690,8 +709,8 @@ static int l_bot_set_tool(lua_State* L)
 // bot.place_block(id, x, y, z)
 static int l_bot_place_block(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
-    player_t*   bot    = get_bot_arg(L, 1);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t*   bot    = get_bot_arg(L, server, 1);
     lua_Integer x      = luaL_checkinteger(L, 2);
     lua_Integer y      = luaL_checkinteger(L, 3);
     lua_Integer z      = luaL_checkinteger(L, 4);
@@ -759,7 +778,7 @@ static const luaL_Reg bot_lib[] = {
 
 static int l_map_get_block(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer x      = luaL_checkinteger(L, 1);
     lua_Integer y      = luaL_checkinteger(L, 2);
     lua_Integer z      = luaL_checkinteger(L, 3);
@@ -777,7 +796,7 @@ static int l_map_get_block(lua_State* L)
 
 static int l_map_set_block(lua_State* L)
 {
-    server_t*    server = lua_mgr_get_server(L);
+    server_t*    server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer  x      = luaL_checkinteger(L, 1);
     lua_Integer  y      = luaL_checkinteger(L, 2);
     lua_Integer  z      = luaL_checkinteger(L, 3);
@@ -794,7 +813,7 @@ static int l_map_set_block(lua_State* L)
 
 static int l_map_remove_block(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer x = luaL_checkinteger(L, 1);
     lua_Integer y = luaL_checkinteger(L, 2);
     lua_Integer z = luaL_checkinteger(L, 3);
@@ -807,7 +826,7 @@ static int l_map_remove_block(lua_State* L)
 
 static int l_map_find_top(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer x = luaL_checkinteger(L, 1);
     lua_Integer y = luaL_checkinteger(L, 2);
     if (!server) {
@@ -847,7 +866,7 @@ static const luaL_Reg map_lib[] = {
 
 static int l_server_broadcast(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     const char* msg    = luaL_checkstring(L, 1);
     if (server) {
         broadcast_server_notice(server, 0, "%s", msg);
@@ -859,7 +878,7 @@ static int l_server_broadcast(lua_State* L)
 // Returns the team color configured in config.toml for Team.A or Team.B.
 static int l_server_get_team_color(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     if (!server || (team != TEAM_A && team != TEAM_B)) {
         lua_pushnil(L);
@@ -888,7 +907,7 @@ static int l_server_register_command(lua_State* L)
 // server.get_intel_position(team) → Vector3D | nil
 static int l_server_get_intel_position(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     if (!server || (team != TEAM_A && team != TEAM_B)) {
         lua_pushnil(L);
@@ -903,7 +922,7 @@ static int l_server_get_intel_position(lua_State* L)
 // Moves the flag server-side and broadcasts the new position to all clients.
 static int l_server_set_intel_position(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     lua_Number  x      = luaL_checknumber(L, 2);
     lua_Number  y      = luaL_checknumber(L, 3);
@@ -920,7 +939,7 @@ static int l_server_set_intel_position(lua_State* L)
 // server.get_base_position(team) → Vector3D | nil
 static int l_server_get_base_position(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     if (!server || (team != TEAM_A && team != TEAM_B)) {
         lua_pushnil(L);
@@ -935,7 +954,7 @@ static int l_server_get_base_position(lua_State* L)
 // Returns the id of the player currently carrying the given team's flag, or nil.
 static int l_server_get_intel_carrier(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     if (!server || (team != TEAM_A && team != TEAM_B)) {
         lua_pushnil(L);
@@ -958,7 +977,7 @@ static int l_server_get_intel_carrier(lua_State* L)
 // server.is_intel_held(team) → boolean
 static int l_server_is_intel_held(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     if (!server || (team != TEAM_A && team != TEAM_B)) {
         lua_pushboolean(L, 0);
@@ -972,7 +991,7 @@ static int l_server_is_intel_held(lua_State* L)
 // Moves the team's tent/base server-side and broadcasts the new position.
 static int l_server_set_base_position(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     lua_Number  x      = luaL_checknumber(L, 2);
     lua_Number  y      = luaL_checknumber(L, 3);
@@ -990,7 +1009,7 @@ static int l_server_set_base_position(lua_State* L)
 // server.set_capture_limit(n) — set the score needed to win the round.
 static int l_server_set_capture_limit(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer limit  = luaL_checkinteger(L, 1);
     if (!server || limit < 1 || limit > 255) {
         return 0;
@@ -1002,7 +1021,7 @@ static int l_server_set_capture_limit(lua_State* L)
 // server.get_gamemode() → integer (GameMode enum value)
 static int l_server_get_gamemode(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_pushinteger(L, server ? server->protocol.current_gamemode : 0);
     return 1;
 }
@@ -1010,7 +1029,7 @@ static int l_server_get_gamemode(lua_State* L)
 // server.get_score(team) → integer
 static int l_server_get_score(lua_State* L)
 {
-    server_t*   server = lua_mgr_get_server(L);
+    server_t*   server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
     lua_Integer team   = luaL_checkinteger(L, 1);
     if (!server || (team != TEAM_A && team != TEAM_B)) {
         lua_pushinteger(L, 0);
@@ -1026,8 +1045,8 @@ static int l_server_get_score(lua_State* L)
 // and destroys blocks in the standard grenade radius.
 static int l_server_explode(lua_State* L)
 {
-    server_t* server = lua_mgr_get_server(L);
-    player_t* player = get_player_arg(L, 1);
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* player = get_player_arg(L, server, 1);
     if (!server || !player) {
         return 0;
     }
@@ -1096,7 +1115,7 @@ static const luaL_Reg log_lib[] = {
 // Registration
 // ============================================================================
 
-void lua_bindings_register(lua_State* L)
+void lua_bindings_register(lua_State* L, server_t* server)
 {
     // Register Vector2D, Vector3D, Color globals first so they are available
     // to all subsequently loaded scripts and to the API functions themselves.
@@ -1145,17 +1164,27 @@ void lua_bindings_register(lua_State* L)
     lua_setglobal(L, "GameMode");
 
     // ---- Modules ----
+    // player, bot, map, server: inject server* as upvalue #1 into every function.
+    // log: no server access needed, registered normally with no upvalue.
 
-    luaL_newlib(L, player_lib);
+    lua_newtable(L);
+    lua_pushlightuserdata(L, server);
+    luaL_setfuncs(L, player_lib, 1);
     lua_setglobal(L, "player");
 
-    luaL_newlib(L, bot_lib);
+    lua_newtable(L);
+    lua_pushlightuserdata(L, server);
+    luaL_setfuncs(L, bot_lib, 1);
     lua_setglobal(L, "bot");
 
-    luaL_newlib(L, map_lib);
+    lua_newtable(L);
+    lua_pushlightuserdata(L, server);
+    luaL_setfuncs(L, map_lib, 1);
     lua_setglobal(L, "map");
 
-    luaL_newlib(L, server_lib);
+    lua_newtable(L);
+    lua_pushlightuserdata(L, server);
+    luaL_setfuncs(L, server_lib, 1);
     lua_setglobal(L, "server");
 
     luaL_newlib(L, log_lib);
