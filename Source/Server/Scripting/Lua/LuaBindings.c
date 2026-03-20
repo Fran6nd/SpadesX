@@ -1202,6 +1202,25 @@ void lua_bindings_register(lua_State* L, server_t* server)
     lua_make_enum(L);
     lua_setglobal(L, "GameMode");
 
+    // Permission thresholds for server.register_command().
+    // Each value is the bitmask of all role bits at or above the named level,
+    // matching the same values used by the built-in C commands.
+    // Roles and their bit positions (from Player.c):
+    //   trusted  → bit 0  (1 << 0)
+    //   guard    → bit 1  (1 << 1)
+    //   mod      → bit 2  (1 << 2)
+    //   admin    → bit 3  (1 << 3)
+    //   manager  → bit 4  (1 << 4)
+    lua_newtable(L);
+    lua_pushinteger(L,  0); lua_setfield(L, -2, "NONE");     // no restriction — anyone
+    lua_pushinteger(L, 31); lua_setfield(L, -2, "TRUSTED");  // trusted or above (bits 0-4)
+    lua_pushinteger(L, 30); lua_setfield(L, -2, "GUARD");    // guard or above  (bits 1-4)
+    lua_pushinteger(L, 28); lua_setfield(L, -2, "MOD");      // mod or above    (bits 2-4)
+    lua_pushinteger(L, 24); lua_setfield(L, -2, "ADMIN");    // admin or above  (bits 3-4)
+    lua_pushinteger(L, 16); lua_setfield(L, -2, "MANAGER");  // manager only    (bit 4)
+    lua_make_enum(L);
+    lua_setglobal(L, "Permission");
+
     // ---- Modules ----
     // player, bot, map, server: inject server* as upvalue #1 into every function.
     // log: no server access needed, registered normally with no upvalue.

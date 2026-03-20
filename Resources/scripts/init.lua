@@ -37,11 +37,10 @@ server.register_command("/players", "List all connected players", function(playe
     player.send_notice(player_id, msg)
 end, 0)
 
--- /kill_all — admin-only example (permissions = 30, same bitmask as built-in admin commands)
--- Only players who have logged in with an admin role can see and run this command.
+-- /kill_all — admin-only: only players with the admin role (or higher) can see and run this.
 server.register_command("/kill_all", "Kill all players on the server (admin only)", function(player_id, args)
     for id, name in player.iterate() do
         player.kill(id)
     end
     server.broadcast("All players were killed by an admin.")
-end, 30)
+end, Permission.ADMIN)
