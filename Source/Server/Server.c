@@ -64,6 +64,9 @@ static void _string_nodes_free(string_node_t* root)
     DL_FOREACH_SAFE(root, el, tmp)
     {
         free(el->string);
+        for (size_t i = 0; i < el->scripts_count; i++) {
+            free(el->scripts[i]);
+        }
         free(el->scripts);
         DL_DELETE(root, el);
         free(el);

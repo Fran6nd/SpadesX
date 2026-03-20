@@ -53,7 +53,46 @@ int main(void)
     TOMLH_GET_INT(server_table, gamemode, "gamemode", 0, 0);
     TOMLH_GET_INT(server_table, capture_limit, "capture_limit", 10, 0);
 
-    TOMLH_GET_STRING_ARRAY_AS_DL(server_table, map_list, map_list_len, "maps", 0);
+    // Parse maps: each entry is an inline table { name = "...", scripts = [...] }
+    {
+        toml_array_t* maps_array = toml_array_in(server_table, "maps");
+        if (!maps_array) {
+            LOG_ERROR("Cannot find 'maps' array in config.toml [server]");
+            exit(EXIT_FAILURE);
+        }
+        map_list_len = toml_array_nelem(maps_array);
+        for (size_t i = 0; i < map_list_len; i++) {
+            toml_table_t* entry = toml_table_at(maps_array, i);
+            if (!entry) {
+                LOG_ERROR("maps[%zu] is not a table — expected { name = \"...\", scripts = [...] }", i);
+                exit(EXIT_FAILURE);
+            }
+            toml_datum_t name_datum = toml_string_in(entry, "name");
+            if (!name_datum.ok) {
+                LOG_ERROR("maps[%zu] missing required 'name' field", i);
+                exit(EXIT_FAILURE);
+            }
+            string_node_t* node  = spadesx_malloc(sizeof(string_node_t));
+            node->string         = name_datum.u.s;
+            node->scripts        = NULL;
+            node->scripts_count  = 0;
+
+            toml_array_t* scripts_arr = toml_array_in(entry, "scripts");
+            if (scripts_arr) {
+                node->scripts_count = toml_array_nelem(scripts_arr);
+                node->scripts       = spadesx_malloc(node->scripts_count * sizeof(char*));
+                for (size_t j = 0; j < node->scripts_count; j++) {
+                    toml_datum_t s = toml_string_at(scripts_arr, j);
+                    if (!s.ok) {
+                        LOG_ERROR("maps[%zu].scripts[%zu]: failed to read script name", i, j);
+                        exit(EXIT_FAILURE);
+                    }
+                    node->scripts[j] = s.u.s;
+                }
+            }
+            DL_APPEND(map_list, node);
+        }
+    }
 
     if (map_list_len == 0) {
         LOG_ERROR("No maps defined in config.toml [server] maps array");
