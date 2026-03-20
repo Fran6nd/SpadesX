@@ -410,76 +410,82 @@ void lua_mgr_register_command(lua_State* L, int func_ref,
 }
 
 // ============================================================================
+// Dispatch primitives — shared error handling and table retrieval
+// ============================================================================
+
+// Prepare a named-global call: push the function and return 1.
+// Returns 0 (stack unchanged) if L is NULL or the global is not callable.
+static int dispatch_begin(lua_State* L, const char* fn)
+{
+    if (!L) return 0;
+    lua_getglobal(L, fn);
+    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return 0; }
+    return 1;
+}
+
+// Finish a void call: pcall nargs args, log any error, clean stack.
+static void dispatch_void_call(lua_State* L, const char* fn, int nargs)
+{
+    if (lua_pcall(L, nargs, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+// Prepare a hooks iteration: get _registered_hooks[event] and return its length.
+// Returns 0 (stack clean) if L is NULL, event absent, or list empty.
+// On success leaves [_registered_hooks, handlers_table] on top of stack.
+static int hooks_begin(lua_State* L, const char* event)
+{
+    if (!L) return 0;
+    lua_getglobal(L, "_registered_hooks");
+    lua_getfield(L, -1, event);
+    if (!lua_istable(L, -1)) { lua_pop(L, 2); return 0; }
+    int n = (int)lua_rawlen(L, -1);
+    if (n == 0) { lua_pop(L, 2); return 0; }
+    return n;
+}
+
+// pcall one hook handler (already on stack), log and discard any error.
+static void hooks_iter_void(lua_State* L, const char* event, int i, int nargs)
+{
+    if (lua_pcall(L, nargs, 0, 0) != LUA_OK) {
+        LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+}
+
+// ============================================================================
 // Hook dispatch helpers — named globals (used for g_server_lua / init.lua)
 // ============================================================================
 
 static void dispatch_void_0(lua_State* L, const char* fn)
 {
-    if (!L) {
-        return;
-    }
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 1);
-        return;
-    }
-    if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+    if (!dispatch_begin(L, fn)) return;
+    dispatch_void_call(L, fn, 0);
 }
 
 static void dispatch_void_1s(lua_State* L, const char* fn, const char* s)
 {
-    if (!L) {
-        return;
-    }
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 1);
-        return;
-    }
+    if (!dispatch_begin(L, fn)) return;
     lua_pushstring(L, s ? s : "");
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+    dispatch_void_call(L, fn, 1);
 }
 
 static void dispatch_void_1i(lua_State* L, const char* fn, lua_Integer i)
 {
-    if (!L) {
-        return;
-    }
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 1);
-        return;
-    }
+    if (!dispatch_begin(L, fn)) return;
     lua_pushinteger(L, i);
-    if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+    dispatch_void_call(L, fn, 1);
 }
 
 static void dispatch_void_1i_1s(lua_State* L, const char* fn,
                                  lua_Integer i, const char* s)
 {
-    if (!L) {
-        return;
-    }
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) {
-        lua_pop(L, 1);
-        return;
-    }
+    if (!dispatch_begin(L, fn)) return;
     lua_pushinteger(L, i);
     lua_pushstring(L, s ? s : "");
-    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+    dispatch_void_call(L, fn, 2);
 }
 
 // Deny hook: (player_id, Vector3D) — used for grenade_explode.
@@ -647,53 +653,35 @@ static int dispatch_command(lua_State* L, const char* fn,
 
 static void dispatch_hooks_void_0(lua_State* L, const char* event)
 {
-    if (!L) return;
-    lua_getglobal(L, "_registered_hooks");
-    lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    int n = (int)lua_rawlen(L, -1);
+    int n = hooks_begin(L, event);
+    if (!n) return;
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
-        if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
+        hooks_iter_void(L, event, i, 0);
     }
     lua_pop(L, 2);
 }
 
 static void dispatch_hooks_void_1s(lua_State* L, const char* event, const char* s)
 {
-    if (!L) return;
-    lua_getglobal(L, "_registered_hooks");
-    lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    int n = (int)lua_rawlen(L, -1);
+    int n = hooks_begin(L, event);
+    if (!n) return;
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         lua_pushstring(L, s ? s : "");
-        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
+        hooks_iter_void(L, event, i, 1);
     }
     lua_pop(L, 2);
 }
 
 static void dispatch_hooks_void_1i(lua_State* L, const char* event, lua_Integer a)
 {
-    if (!L) return;
-    lua_getglobal(L, "_registered_hooks");
-    lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    int n = (int)lua_rawlen(L, -1);
+    int n = hooks_begin(L, event);
+    if (!n) return;
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         lua_pushinteger(L, a);
-        if (lua_pcall(L, 1, 0, 0) != LUA_OK) {
-            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
+        hooks_iter_void(L, event, i, 1);
     }
     lua_pop(L, 2);
 }
@@ -701,35 +689,24 @@ static void dispatch_hooks_void_1i(lua_State* L, const char* event, lua_Integer 
 static void dispatch_void_3i(lua_State* L, const char* fn,
                               lua_Integer a, lua_Integer b, lua_Integer c)
 {
-    if (!L) return;
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return; }
+    if (!dispatch_begin(L, fn)) return;
     lua_pushinteger(L, a);
     lua_pushinteger(L, b);
     lua_pushinteger(L, c);
-    if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+    dispatch_void_call(L, fn, 3);
 }
 
 static void dispatch_hooks_void_3i(lua_State* L, const char* event,
                                     lua_Integer a, lua_Integer b, lua_Integer c)
 {
-    if (!L) return;
-    lua_getglobal(L, "_registered_hooks");
-    lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    int n = (int)lua_rawlen(L, -1);
+    int n = hooks_begin(L, event);
+    if (!n) return;
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         lua_pushinteger(L, a);
         lua_pushinteger(L, b);
         lua_pushinteger(L, c);
-        if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
+        hooks_iter_void(L, event, i, 3);
     }
     lua_pop(L, 2);
 }
@@ -737,19 +714,13 @@ static void dispatch_hooks_void_3i(lua_State* L, const char* event,
 static void dispatch_hooks_void_1i_1s(lua_State* L, const char* event,
                                        lua_Integer a, const char* s)
 {
-    if (!L) return;
-    lua_getglobal(L, "_registered_hooks");
-    lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    int n = (int)lua_rawlen(L, -1);
+    int n = hooks_begin(L, event);
+    if (!n) return;
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         lua_pushinteger(L, a);
         lua_pushstring(L, s ? s : "");
-        if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
+        hooks_iter_void(L, event, i, 2);
     }
     lua_pop(L, 2);
 }
@@ -980,33 +951,22 @@ static int dispatch_hooks_command(lua_State* L, const char* event,
 static void dispatch_void_2i(lua_State* L, const char* fn,
                               lua_Integer a, lua_Integer b)
 {
-    if (!L) return;
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return; }
+    if (!dispatch_begin(L, fn)) return;
     lua_pushinteger(L, a);
     lua_pushinteger(L, b);
-    if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+    dispatch_void_call(L, fn, 2);
 }
 
 static void dispatch_hooks_void_2i(lua_State* L, const char* event,
                                     lua_Integer a, lua_Integer b)
 {
-    if (!L) return;
-    lua_getglobal(L, "_registered_hooks");
-    lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    int n = (int)lua_rawlen(L, -1);
+    int n = hooks_begin(L, event);
+    if (!n) return;
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         lua_pushinteger(L, a);
         lua_pushinteger(L, b);
-        if (lua_pcall(L, 2, 0, 0) != LUA_OK) {
-            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
+        hooks_iter_void(L, event, i, 2);
     }
     lua_pop(L, 2);
 }
@@ -1016,36 +976,25 @@ static void dispatch_void_2i_vec3(lua_State* L, const char* fn,
                                    lua_Integer a, lua_Integer b,
                                    float x, float y, float z)
 {
-    if (!L) return;
-    lua_getglobal(L, fn);
-    if (!lua_isfunction(L, -1)) { lua_pop(L, 1); return; }
+    if (!dispatch_begin(L, fn)) return;
     lua_pushinteger(L, a);
     lua_pushinteger(L, b);
     lua_push_vec3(L, x, y, z);
-    if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-        LOG_ERROR("[Script] %s: %s", fn, lua_tostring(L, -1));
-        lua_pop(L, 1);
-    }
+    dispatch_void_call(L, fn, 3);
 }
 
 static void dispatch_hooks_void_2i_vec3(lua_State* L, const char* event,
                                          lua_Integer a, lua_Integer b,
                                          float x, float y, float z)
 {
-    if (!L) return;
-    lua_getglobal(L, "_registered_hooks");
-    lua_getfield(L, -1, event);
-    if (!lua_istable(L, -1)) { lua_pop(L, 2); return; }
-    int n = (int)lua_rawlen(L, -1);
+    int n = hooks_begin(L, event);
+    if (!n) return;
     for (int i = 1; i <= n; i++) {
         lua_rawgeti(L, -1, i);
         lua_pushinteger(L, a);
         lua_pushinteger(L, b);
         lua_push_vec3(L, x, y, z);
-        if (lua_pcall(L, 3, 0, 0) != LUA_OK) {
-            LOG_ERROR("[Script] %s[%d]: %s", event, i, lua_tostring(L, -1));
-            lua_pop(L, 1);
-        }
+        hooks_iter_void(L, event, i, 3);
     }
     lua_pop(L, 2);
 }
