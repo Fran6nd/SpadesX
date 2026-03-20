@@ -31,6 +31,8 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
+#include <Util/Physics.h>
+
 #include <math.h>
 #include <string.h>
 
@@ -329,6 +331,36 @@ static int l_player_get_tool(lua_State* L)
     return 1;
 }
 
+// player.get_aiming_point(player_id) → Vector3D | nil
+// Casts a ray from the player's eye position along their forward orientation and
+// returns the integer coordinates of the first solid voxel hit within 128 units,
+// or nil if nothing is hit (open sky, out of range, or player not ready).
+static int l_player_get_aiming_point(lua_State* L)
+{
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* p = get_player_arg(L, server, 1);
+    if (!p || p->state != STATE_READY) {
+        lua_pushnil(L);
+        return 1;
+    }
+    long hx, hy, hz;
+    long hit = physics_cast_ray(server,
+                                p->movement.eye_pos.x,
+                                p->movement.eye_pos.y,
+                                p->movement.eye_pos.z,
+                                p->movement.forward_orientation.x,
+                                p->movement.forward_orientation.y,
+                                p->movement.forward_orientation.z,
+                                128.0f,
+                                &hx, &hy, &hz);
+    if (!hit) {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_push_vec3(L, (float)hx, (float)hy, (float)hz);
+    return 1;
+}
+
 // Iterates all connected players as (id, name) pairs.
 // Usage: for id, name in player.iterate() do ... end
 static int l_player_iterate_next(lua_State* L)
@@ -374,6 +406,7 @@ static const luaL_Reg player_shared_lib[] = {
     {"restock",             l_player_restock},
     {"send_notice",         l_player_send_notice},
     {"explode",             l_player_explode},
+    {"get_aiming_point",    l_player_get_aiming_point},
     {NULL, NULL}
 };
 
