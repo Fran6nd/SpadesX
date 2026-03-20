@@ -43,9 +43,10 @@ typedef struct block {
 // Scripting system lifecycle
 // ============================================================================
 
-// Initialize the scripting system and load server-wide scripts from scripts/.
+// Initialize the scripting system and load the given server-wide scripts from scripts/.
+// scripts/count come from the [server] scripts = [...] entry in config.toml.
 // Call once, early in server_start(), after the command system is ready.
-void scripting_init(server_t* server);
+void scripting_init(server_t* server, char** scripts, size_t count);
 
 // Shut down the scripting system, unregister all script-registered commands,
 // and release all resources. Call once during server shutdown.

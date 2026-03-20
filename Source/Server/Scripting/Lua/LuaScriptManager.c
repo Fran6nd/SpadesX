@@ -15,8 +15,6 @@
 #include <lualib.h>
 #include <lauxlib.h>
 
-#include <dirent.h>
-#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -188,37 +186,18 @@ static lua_State* new_state(server_t* server)
     return L;
 }
 
-static void load_directory(lua_State* L, const char* dir)
+static void load_scripts(lua_State* L, const char* dir, char** scripts, size_t count)
 {
-    DIR* d = opendir(dir);
-    if (!d) {
-        if (errno != ENOENT) {
-            LOG_WARNING("[Scripting] Cannot open scripts directory: %s", dir);
+    for (size_t i = 0; i < count; i++) {
+        if (!scripts[i]) continue;
+        char path[512];
+        snprintf(path, sizeof(path), "%s/%s", dir, scripts[i]);
+        if (luaL_dofile(L, path) != LUA_OK) {
+            LOG_ERROR("[Scripting] Error loading %s: %s", path, lua_tostring(L, -1));
+            lua_pop(L, 1);
+        } else {
+            LOG_INFO("[Scripting] Loaded: %s", path);
         }
-        return;
-    }
-
-    int         count = 0;
-    struct dirent* ent;
-    while ((ent = readdir(d)) != NULL) {
-        size_t len = strlen(ent->d_name);
-        if (len > 4 && strcmp(ent->d_name + len - 4, ".lua") == 0) {
-            char path[512];
-            snprintf(path, sizeof(path), "%s/%s", dir, ent->d_name);
-            if (luaL_dofile(L, path) != LUA_OK) {
-                LOG_ERROR("[Scripting] Error loading %s: %s",
-                          path, lua_tostring(L, -1));
-                lua_pop(L, 1);
-            } else {
-                LOG_INFO("[Scripting] Loaded: %s", path);
-                count++;
-            }
-        }
-    }
-    closedir(d);
-
-    if (count > 0) {
-        LOG_INFO("[Scripting] %d server script(s) loaded from %s", count, dir);
     }
 }
 
@@ -249,7 +228,7 @@ static void unregister_cmds(server_t* server, lua_cmd_entry_t** list)
 // Public lifecycle
 // ============================================================================
 
-void lua_script_manager_init(server_t* server)
+void lua_script_manager_init(server_t* server, char** scripts, size_t count)
 {
     g_server = server;
 
@@ -259,7 +238,7 @@ void lua_script_manager_init(server_t* server)
         return;
     }
 
-    load_directory(g_server_lua, "scripts");
+    load_scripts(g_server_lua, "scripts", scripts, count);
     LOG_INFO("[Scripting] Server scripting initialized");
 }
 

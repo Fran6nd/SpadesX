@@ -5,6 +5,8 @@
 
 typedef struct server_args
 {
+    char**         server_scripts;
+    size_t         server_scripts_count;
     string_node_t* map_list;
     string_node_t* welcome_message_list;
     string_node_t* periodic_message_list;

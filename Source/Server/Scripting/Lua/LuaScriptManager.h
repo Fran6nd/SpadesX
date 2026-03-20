@@ -18,7 +18,7 @@ extern "C" {
 // Lifecycle
 // ============================================================================
 
-void lua_script_manager_init(server_t* server);
+void lua_script_manager_init(server_t* server, char** scripts, size_t count);
 void lua_script_manager_shutdown(server_t* server);
 void lua_script_manager_map_load(server_t* server, const char* map_name, char** scripts, size_t count);
 void lua_script_manager_map_unload(server_t* server, const char* map_name);

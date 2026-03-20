@@ -33,6 +33,8 @@ int main(void)
     uint8_t     periodic_delays[5];
     uint8_t     max_players;
 
+    char**         server_scripts        = NULL;
+    size_t         server_scripts_count  = 0;
     string_node_t* map_list              = NULL;
     string_node_t* welcome_message_list  = NULL;
     string_node_t* periodic_message_list = NULL;
@@ -56,6 +58,23 @@ int main(void)
     TOMLH_GET_INT(server_table, capture_limit, "capture_limit", 10, 0);
     TOMLH_GET_INT(server_table, max_players, "max_players", 32, 0);
     TOMLH_GET_STRING(server_table, ban_file, "ban_file", "Bans.json", 0);
+
+    // Parse server-wide scripts (optional — omit key or leave empty for none).
+    {
+        toml_array_t* scripts_arr = toml_array_in(server_table, "scripts");
+        if (scripts_arr) {
+            server_scripts_count = toml_array_nelem(scripts_arr);
+            server_scripts       = spadesx_malloc(server_scripts_count * sizeof(char*));
+            for (size_t j = 0; j < server_scripts_count; j++) {
+                toml_datum_t s = toml_string_at(scripts_arr, j);
+                if (!s.ok) {
+                    LOG_ERROR("[server].scripts[%zu]: failed to read script name", j);
+                    exit(EXIT_FAILURE);
+                }
+                server_scripts[j] = s.u.s;
+            }
+        }
+    }
 
     // Parse maps: each entry is an inline table { name = "...", scripts = [...] }
     {
@@ -154,6 +173,8 @@ int main(void)
                         .in_bandwidth              = 0,
                         .out_bandwidth             = 0,
                         .master                    = master,
+                        .server_scripts            = server_scripts,
+                        .server_scripts_count      = server_scripts_count,
                         .map_list                  = map_list,
                         .map_count                 = map_list_len,
                         .welcome_message_list      = welcome_message_list,
@@ -179,6 +200,10 @@ int main(void)
 
     server_start(args);
 
+    for (size_t i = 0; i < server_scripts_count; i++) {
+        free(server_scripts[i]);
+    }
+    free(server_scripts);
     free((char*) ban_file);
     free((char*) server_name);
     free((char*) manager_passwd);

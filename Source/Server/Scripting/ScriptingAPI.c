@@ -7,9 +7,9 @@
 #include <Server/Scripting/ScriptingAPI.h>
 #include <Server/Scripting/Lua/LuaScriptManager.h>
 
-void scripting_init(server_t* server)
+void scripting_init(server_t* server, char** scripts, size_t count)
 {
-    lua_script_manager_init(server);
+    lua_script_manager_init(server, scripts, count);
 }
 
 void scripting_shutdown(server_t* server)

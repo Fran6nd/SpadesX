@@ -494,7 +494,7 @@ void server_start(server_args args)
     init_packets(&server);
 
     // Initialize scripting system, fire server init hook, then load map script.
-    scripting_init(&server);
+    scripting_init(&server, args.server_scripts, args.server_scripts_count);
     scripting_on_server_init(&server);
     scripting_map_load(&server, server.map_name, server.map_scripts, server.map_scripts_count);
 

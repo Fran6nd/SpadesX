@@ -23,6 +23,11 @@ ban_file = "Bans.json"
 # Enable this if you want your server to show up on the server list
 master = false
 
+# Server-wide scripts loaded at startup from the scripts/ directory.
+# These persist across all map rotations.
+# Omit this key (or leave the list empty) to run with no server-wide scripts.
+scripts = ["init.lua"]
+
 # Map rotation
 # List the maps you want to use (must exist in Resources/maps/)
 # Each map must be in its own folder: Resources/maps/MapName/MapName.{vxl,toml}
