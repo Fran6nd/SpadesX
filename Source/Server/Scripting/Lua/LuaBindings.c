@@ -353,13 +353,12 @@ static int l_player_iterate(lua_State* L)
     return 1;
 }
 
-// player.create_bot(name, team, weapon) → id or nil
-static const luaL_Reg player_lib[] = {
-    {"count",               l_player_count},
+// Accessors shared between player.* and bot.* — registered into both modules.
+static const luaL_Reg player_shared_lib[] = {
     {"get_name",            l_player_get_name},
     {"get_team",            l_player_get_team},
-    {"get_weapon",          l_player_get_weapon},
     {"set_team",            l_bot_set_team},
+    {"get_weapon",          l_player_get_weapon},
     {"set_weapon",          l_bot_set_weapon},
     {"get_hp",              l_player_get_hp},
     {"set_hp",              l_player_set_hp},
@@ -368,13 +367,19 @@ static const luaL_Reg player_lib[] = {
     {"get_color",           l_player_get_color},
     {"set_color",           l_player_set_color},
     {"set_color_broadcast", l_player_set_color_broadcast},
+    {"get_tool",            l_player_get_tool},
+    {"get_blocks",          l_player_get_blocks},
+    {"get_grenades",        l_player_get_grenades},
     {"kill",                l_player_kill},
     {"restock",             l_player_restock},
     {"send_notice",         l_player_send_notice},
+    {NULL, NULL}
+};
+
+// player-only entries (not exposed on bot)
+static const luaL_Reg player_lib[] = {
+    {"count",               l_player_count},
     {"is_bot",              l_player_is_bot},
-    {"get_blocks",          l_player_get_blocks},
-    {"get_grenades",        l_player_get_grenades},
-    {"get_tool",            l_player_get_tool},
     {"iterate",             l_player_iterate},
     {NULL, NULL}
 };
@@ -729,9 +734,8 @@ static int l_bot_place_block(lua_State* L)
     return 0;
 }
 
-// bot.set_team(id, team) — already implemented as l_bot_set_team above (same pointer used)
-// bot.set_weapon(id, weapon) — already implemented as l_bot_set_weapon above
-
+// bot-only entries; shared player accessors are added at registration time
+// from player_shared_lib so they are not duplicated here.
 static const luaL_Reg bot_lib[] = {
     // lifecycle
     {"create",              l_bot_create},
@@ -749,26 +753,7 @@ static const luaL_Reg bot_lib[] = {
     {"fire",                l_bot_fire},
     {"reload",              l_bot_reload},
     {"place_block",         l_bot_place_block},
-    // player accessors — same underlying functions, work on any player_t
-    {"get_name",            l_player_get_name},
-    {"get_team",            l_player_get_team},
-    {"set_team",            l_bot_set_team},
-    {"get_weapon",          l_player_get_weapon},
-    {"set_weapon",          l_bot_set_weapon},
-    {"get_hp",              l_player_get_hp},
-    {"set_hp",              l_player_set_hp},
-    {"get_position",        l_player_get_position},
-    {"set_position",        l_player_set_position},
-    {"get_color",           l_player_get_color},
-    {"set_color",           l_player_set_color},
-    {"set_color_broadcast", l_player_set_color_broadcast},
-    {"get_tool",            l_player_get_tool},
     {"set_tool",            l_bot_set_tool},
-    {"get_blocks",          l_player_get_blocks},
-    {"get_grenades",        l_player_get_grenades},
-    {"kill",                l_player_kill},
-    {"restock",             l_player_restock},
-    {"send_notice",         l_player_send_notice},
     {NULL, NULL}
 };
 
@@ -1168,13 +1153,13 @@ void lua_bindings_register(lua_State* L, server_t* server)
     // log: no server access needed, registered normally with no upvalue.
 
     lua_newtable(L);
-    lua_pushlightuserdata(L, server);
-    luaL_setfuncs(L, player_lib, 1);
+    lua_pushlightuserdata(L, server); luaL_setfuncs(L, player_shared_lib, 1);
+    lua_pushlightuserdata(L, server); luaL_setfuncs(L, player_lib, 1);
     lua_setglobal(L, "player");
 
     lua_newtable(L);
-    lua_pushlightuserdata(L, server);
-    luaL_setfuncs(L, bot_lib, 1);
+    lua_pushlightuserdata(L, server); luaL_setfuncs(L, bot_lib, 1);
+    lua_pushlightuserdata(L, server); luaL_setfuncs(L, player_shared_lib, 1);
     lua_setglobal(L, "bot");
 
     lua_newtable(L);
