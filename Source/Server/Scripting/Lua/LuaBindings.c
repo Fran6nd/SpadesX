@@ -385,6 +385,25 @@ static int l_player_iterate(lua_State* L)
     return 1;
 }
 
+// player.explode(player_id, x, y, z)
+// Triggers a full grenade explosion at (x, y, z) attributed to the given player.
+// Broadcasts the grenade visual, applies area damage to all ready players,
+// and destroys blocks in the standard grenade radius.
+static int l_player_explode(lua_State* L)
+{
+    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
+    player_t* player = get_player_arg(L, server, 1);
+    if (!server || !player) {
+        return 0;
+    }
+    vector3f_t pos;
+    pos.x = (float)luaL_checknumber(L, 2);
+    pos.y = (float)luaL_checknumber(L, 3);
+    pos.z = (float)luaL_checknumber(L, 4);
+    grenade_explode_at(server, player, pos);
+    return 0;
+}
+
 // Accessors shared between player.* and bot.* — registered into both modules.
 static const luaL_Reg player_shared_lib[] = {
     {"get_name",            l_player_get_name},
@@ -1076,25 +1095,6 @@ static int l_server_get_score(lua_State* L)
     }
     lua_pushinteger(L, server->protocol.gamemode.score[team]);
     return 1;
-}
-
-// player.explode(player_id, x, y, z)
-// Triggers a full grenade explosion at (x, y, z) attributed to the given player.
-// Broadcasts the grenade visual, applies area damage to all ready players,
-// and destroys blocks in the standard grenade radius.
-static int l_player_explode(lua_State* L)
-{
-    server_t* server = (server_t*)lua_touserdata(L, lua_upvalueindex(1));
-    player_t* player = get_player_arg(L, server, 1);
-    if (!server || !player) {
-        return 0;
-    }
-    vector3f_t pos;
-    pos.x = (float)luaL_checknumber(L, 2);
-    pos.y = (float)luaL_checknumber(L, 3);
-    pos.z = (float)luaL_checknumber(L, 4);
-    grenade_explode_at(server, player, pos);
-    return 0;
 }
 
 static const luaL_Reg server_lib[] = {
