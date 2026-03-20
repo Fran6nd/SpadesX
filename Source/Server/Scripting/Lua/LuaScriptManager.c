@@ -396,12 +396,8 @@ void lua_mgr_register_command(lua_State* L, int func_ref,
     strncpy(cmd->id, name, sizeof(cmd->id) - 1);
     cmd->id[sizeof(cmd->id) - 1] = '\0';
 
-    if (description) {
-        strncpy(cmd->description, description, sizeof(cmd->description) - 1);
-        cmd->description[sizeof(cmd->description) - 1] = '\0';
-    } else {
-        snprintf(cmd->description, sizeof(cmd->description), "Script command: %s", name);
-    }
+    strncpy(cmd->description, description, sizeof(cmd->description) - 1);
+    cmd->description[sizeof(cmd->description) - 1] = '\0';
 
     HASH_ADD_STR(g_server->cmds_map, id, cmd);
     LL_APPEND(g_server->cmds_list, cmd);

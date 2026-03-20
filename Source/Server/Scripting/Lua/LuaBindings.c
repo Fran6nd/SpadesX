@@ -909,10 +909,12 @@ static int l_server_get_team_color(lua_State* L)
 }
 
 // server.register_command(name, description, handler [, permissions])
+// description is required. Pass a permissions bitmask (e.g. 30 for admin-only)
+// to restrict the command; 0 (default) allows everyone.
 static int l_server_register_command(lua_State* L)
 {
     const char* name  = luaL_checkstring(L, 1);
-    const char* desc  = luaL_optstring(L, 2, NULL);
+    const char* desc  = luaL_checkstring(L, 2);
     luaL_checktype(L, 3, LUA_TFUNCTION);
     lua_Integer perms = luaL_optinteger(L, 4, 0);
 
