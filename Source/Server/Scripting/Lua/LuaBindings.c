@@ -15,6 +15,7 @@
 #include <Server/Structs/PlayerStruct.h>
 #include <Server/Player.h>
 #include <Server/Packets/Packets.h>
+#include <Server/Grenade.h>
 #include <Server/Map.h>
 #include <Util/Checks/PlayerChecks.h>
 #include <Util/Log.h>
@@ -1019,6 +1020,25 @@ static int l_server_get_score(lua_State* L)
     return 1;
 }
 
+// server.explode(player_id, x, y, z)
+// Triggers a full grenade explosion at (x, y, z), attributed to player_id.
+// Sends the visual block-action packet, applies area damage to all ready players,
+// and destroys blocks in the standard grenade radius.
+static int l_server_explode(lua_State* L)
+{
+    server_t* server = lua_mgr_get_server(L);
+    player_t* player = get_player_arg(L, 1);
+    if (!server || !player) {
+        return 0;
+    }
+    vector3f_t pos;
+    pos.x = (float)luaL_checknumber(L, 2);
+    pos.y = (float)luaL_checknumber(L, 3);
+    pos.z = (float)luaL_checknumber(L, 4);
+    grenade_explode_at(server, player, pos);
+    return 0;
+}
+
 static const luaL_Reg server_lib[] = {
     {"broadcast",           l_server_broadcast},
     {"register_command",    l_server_register_command},
@@ -1032,6 +1052,7 @@ static const luaL_Reg server_lib[] = {
     {"set_capture_limit",   l_server_set_capture_limit},
     {"get_gamemode",        l_server_get_gamemode},
     {"get_score",           l_server_get_score},
+    {"explode",             l_server_explode},
     {NULL, NULL}
 };
 
