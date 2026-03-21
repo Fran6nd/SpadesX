@@ -17,6 +17,7 @@ end)
 -- Pellet hit a player.
 on.player_hit(function(shooter_id, victim_id, hit_type, weapon)
     if weapon ~= Weapon.SHOTGUN then return end
+    if hit_type == HitType.MELEE then return end
     if last_explode_tick[shooter_id] == tick_count then return end
     last_explode_tick[shooter_id] = tick_count
     local pos = player.get_position(victim_id)
